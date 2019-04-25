@@ -1,7 +1,5 @@
 defmodule SlackDB.Client do
-  @moduledoc """
-  Client to interface with Slack's APIs
-  """
+  @moduledoc false
   require Logger
   use Tesla
   @base_url "https://slack.com/api"

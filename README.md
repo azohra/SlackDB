@@ -2,14 +2,14 @@
 
 A key/value database courtesy of Slack 🙃. This is not a joke.
 
-SlackDB is a middleperson between Slack and your Slack app that facilitates the orchestration of Slack channels across multiple workspaces as a k/v database. SlackDB is highly interactive and it natively supports array storage, rollbacks, and democracy. All 😈 powered 😈 by 😈 the 😈 cloud.
+SlackDB is a middleperson between Slack and your Slack app that facilitates the orchestration of Slack channels across multiple workspaces as a k/v database. SlackDB is highly interactive and it natively supports array storage, rollbacks, and democracy. All powered by the 😈 cloud 😈.
 
 The benefits of using slack as a database are:
 * Slack covers the compute
 * Slack covers the persistent storage
 * You can allow users to vote on values using reactions
 * Native support for arrays through Slack's reply threads
-* Roll back 😉 changes by deleting messages 
+* Roll back changes by deleting messages 
 * Absolutely free 
 
 SlackDB is be extremely useful for Slack apps that need persistant storage but can't justify spinning up an entire database. Obviously, it isn't as performant as a dedicated database but it's easy to use, free (in just about every sense), and has a few unique interactability features.
@@ -18,7 +18,7 @@ SlackDB is be extremely useful for Slack apps that need persistant storage but c
 
 Messages are keys and replies are values. Emojis represent metadata. 
 
-<img src="docs/assets/metadata.png" width="320">
+<img src="design/assets/metadata.png" width="320">
 
 #### Key Types and Metadata
 
@@ -66,7 +66,7 @@ Before startup, you'll need to:
 This channel is responsible for storing the current state (meaning a map of channel names->ids that are currently 'registered') of the database on that particular server. On startup, SlackDB will look in this channel and load the current state. If it can't find the current state, it will start from scratch assuming no channels have yet to be registered with the DB
 
 Your app needs to have the following scopes to get full SlackDB functionality:
-`search:read`, `chat.delete`, `channels:write`, `groups:write`, `channels:read`, `groups:read`, `	reactions:read`, `channels:history`
+`search:read`, `chat.delete`, `channels:write`, `groups:write`, `channels:read`, `groups:read`, `	reactions:read`, `channels:history`, `groups:history`
 
 Once you have your supervisor channels, fill out the config like so:
 
@@ -107,7 +107,7 @@ At this point you can use the CRUDA (CRUD + Append) interface for interacting wi
 You can create new channels or include existing channels through the API and their respective supervisor channels will automatically be updated with the new state. Note that SlackDB can read from any channel that the user token has access to but it can only write to channels that the bot user is in.
 
 
-## Notes on limitations
+## Notes on Limitations
 ### Rate limiting
 The update and delete commands require deleting an entire thread of messages. They do it by calling Slack's `chat.delete` endpoint on each message in the thread (concurrently). This [endpoint](https://api.slack.com/methods/chat.delete) has Tier 3 rate limiting which means it can only handle ~50 calls per minute. Threads with over 50 replies may be at risk of not being fully deleted. 
 

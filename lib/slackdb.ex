@@ -19,7 +19,7 @@ defmodule SlackDB do
     * `:voting` - replies to keys are treated as a ballot where reactions represent support for that particular value. winner takes all.
     * `:multiple` - the reply thread represents an array that is returned in full and in chronological order
     * `:single_front` - the first reply to the key is the value
-    * `:token_scopes` - the most recent reply to the key is the value
+    * `:single_back` - the most recent reply to the key is the value
   """
   @type key_type :: :voting | :multiple | :single_front | :single_back
   @typedoc """
@@ -83,7 +83,7 @@ defmodule SlackDB do
   This function returns an error tuple or a list of tuples indicating the result of posting each value.
   The channel that is specified must exist in the scope of the server.
 
-   ## Example
+  ## Example
 
       iex> SlackDB.create("dog_shelter", "adopted", "Beagles", ["Buddy", "Rufus"], :multiple, [:undeletable])
       [
