@@ -112,12 +112,12 @@ defmodule StatelessApiTest do
          ts: "1555913457.017900"
        }}
 
-    assert search("server", "general", "key", false) === ans
-    assert search("server", "general", "key", true) === ans
+    assert SlackDB.Utils.search("server", "general", "key", false) === ans
+    assert SlackDB.Utils.search("server", "general", "key", true) === ans
   end
 
   test "votable key" do
-    assert get_value(%SlackDB.Key{
+    assert SlackDB.Key.get_value(%SlackDB.Key{
              channel_id: "CFFD4EEMR",
              channel_name: "general",
              key_phrase: "key",
@@ -128,7 +128,7 @@ defmodule StatelessApiTest do
   end
 
   test "multiple key" do
-    assert get_value(%SlackDB.Key{
+    assert SlackDB.Key.get_value(%SlackDB.Key{
              channel_id: "CFFD4EEMR",
              channel_name: "general",
              key_phrase: "key",
@@ -139,7 +139,7 @@ defmodule StatelessApiTest do
   end
 
   test "single front key" do
-    assert get_value(%SlackDB.Key{
+    assert SlackDB.Key.get_value(%SlackDB.Key{
              channel_id: "CFFD4EEMR",
              channel_name: "general",
              key_phrase: "key",
@@ -150,7 +150,7 @@ defmodule StatelessApiTest do
   end
 
   test "single back key" do
-    assert get_value(%SlackDB.Key{
+    assert SlackDB.Key.get_value(%SlackDB.Key{
              channel_id: "CFFD4EEMR",
              channel_name: "general",
              key_phrase: "key",
@@ -181,7 +181,7 @@ defmodule StatelessApiTest do
       }
     ]
 
-    assert post_thread("xoxb", "channel_id", "value", "thread_ts") === ans
+    assert SlackDB.Utils.post_thread("xoxb", "channel_id", "value", "thread_ts") === ans
     assert append("server", "general", "key", "value") === ans
   end
 

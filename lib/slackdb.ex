@@ -11,6 +11,8 @@ defmodule SlackDB do
   use Private
   require Logger
   alias SlackDB.Client
+  alias SlackDB.Utils
+  alias SlackDB.Key
 
   @typedoc """
   Types of SlackDB keys represented as atoms
@@ -36,29 +38,15 @@ defmodule SlackDB do
   """
   @type value :: String.t() | list(String.t())
 
-  @emoji_to_metadata %{
-    ":thumbsup:" => :voting,
-    ":family:" => :multiple,
-    ":hear_no_evil:" => :single_front,
-    ":monkey:" => :single_back,
-    ":do_not_litter:" => :constant,
-    # ":octagonal_sign:" => :blocked,
-    ":anchor:" => :undeletable
-  }
-
   @metadata_to_emoji %{
     voting: ":thumbsup:",
     multiple: ":family:",
     single_front: ":hear_no_evil:",
     single_back: ":monkey:",
     constant: ":do_not_litter:",
-    # blocked: ":octagonal_sign:",
+    # locked: ":octagonal_sign:",
     undeletable: ":anchor:"
   }
-
-  @key_type_regex ":thumbsup:|:family:|:hear_no_evil:|:monkey:"
-  @key_schema ~r/(?<key_phrase>.+)\s(?<key_type>#{@key_type_regex})(?<more_metadata>.*)/
-
   ####################################################################################
   ## PUBLIC API ######################################################################
   ####################################################################################
@@ -117,7 +105,7 @@ defmodule SlackDB do
 
   def create(server_name, channel_name, key_phrase, values, key_type, add_metadata)
       when is_list(values) and is_list(add_metadata) and is_atom(key_type) do
-    Regex.named_captures(@key_schema, key_phrase)
+    Utils.check_schema(key_phrase)
     |> case do
       nil ->
         GenServer.call(
@@ -166,9 +154,9 @@ defmodule SlackDB do
   @spec read(String.t(), String.t(), String.t(), boolean()) ::
           {:error, String.t()} | {:ok, value()}
   def read(server_name, channel_name, key_phrase, only_bot? \\ true) do
-    with {:ok, key} <- search(server_name, channel_name, key_phrase, only_bot?) do
+    with {:ok, key} <- Utils.search(server_name, channel_name, key_phrase, only_bot?) do
       # IO.inspect(key)
-      get_value(key)
+      Key.get_value(key)
     else
       err -> err
     end
@@ -201,14 +189,14 @@ defmodule SlackDB do
   def update(server_name, channel_name, key_phrase, values) when is_list(values) do
     with %{bot_token: bot_token, user_token: user_token} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, key} <- search(server_name, channel_name, key_phrase, false) do
+         {:ok, key} <- Utils.search(server_name, channel_name, key_phrase, false) do
       cond do
         :constant in key.metadata ->
           {:error, "cannot_update_constant_key"}
 
         true ->
-          wipe_thread(user_token, key, false)
-          post_thread(bot_token, key.channel_id, values, key.ts)
+          Utils.wipe_thread(user_token, key, false)
+          Utils.post_thread(bot_token, key.channel_id, values, key.ts)
       end
     else
       nil -> {:error, "server_not_found_in_config"}
@@ -240,10 +228,10 @@ defmodule SlackDB do
   def delete(server_name, channel_name, key_phrase) do
     with %{user_token: user_token} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, key} <- search(server_name, channel_name, key_phrase, false) do
+         {:ok, key} <- Utils.search(server_name, channel_name, key_phrase, false) do
       cond do
         :undeletable in key.metadata -> {:error, "cannot_delete_undeletable_key"}
-        true -> wipe_thread(user_token, key, true)
+        true -> Utils.wipe_thread(user_token, key, true)
       end
     else
       nil -> {:error, "server_not_found_in_config"}
@@ -281,13 +269,13 @@ defmodule SlackDB do
   def append(server_name, channel_name, key_phrase, values) when is_list(values) do
     with %{bot_token: bot_token} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, key} <- search(server_name, channel_name, key_phrase, true) do
+         {:ok, key} <- Utils.search(server_name, channel_name, key_phrase, true) do
       cond do
         :constant in key.metadata ->
           {:error, "cannot_append_to_constant_key"}
 
         true ->
-          post_thread(bot_token, key.channel_id, values, key.ts)
+          Utils.post_thread(bot_token, key.channel_id, values, key.ts)
       end
     else
       nil -> {:error, "server_not_found_in_config"}
@@ -346,7 +334,7 @@ defmodule SlackDB do
     with %{user_token: user_token, supervisor_channel_name: supervisor_channel_name} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
          {:ok, resp} <- Client.conversations_list(user_token),
-         convo_list <- convo_cursor_pagination(user_token, [], resp) do
+         convo_list <- Utils.get_all_convos(user_token, [], resp) do
       case convo_list |> Enum.find(fn chnl -> chnl["name"] == channel_name end) do
         nil ->
           {:error, "channel_not_found"}
@@ -525,7 +513,7 @@ defmodule SlackDB do
                      key_phrase <> " #{metadata_as_emojis}",
                      channel_id
                    ) do
-              post_thread(bot_token, channel_id, values, thread_ts)
+              Utils.post_thread(bot_token, channel_id, values, thread_ts)
             else
               err -> err
             end
@@ -560,7 +548,7 @@ defmodule SlackDB do
   end
 
   def handle_call({:put_channel, server_name, channel_name, channel_id}, _from, state) do
-    new_state = state |> put_kv_in([server_name, :channels], channel_name, channel_id)
+    new_state = state |> Utils.put_kv_in([server_name, :channels], channel_name, channel_id)
     {:reply, {:ok, new_state}, new_state}
   end
 
@@ -596,273 +584,16 @@ defmodule SlackDB do
   def handle_call({:dump}, _from, state), do: {:reply, state, state}
 
   ####################################################################################
-  ## HELPERS #########################################################################
+  ## INIT HELPERS ####################################################################
   ####################################################################################
 
   private do
-    # required scopes: search:read
-    # uses: search.messages with user_token
-    @spec search(String.t(), String.t(), String.t(), boolean()) ::
-            {:ok, SlackDB.Key.t()} | {:error, String.t()}
-    defp search(server_name, channel_name, key_phrase, only_bot?)
-
-    defp search(server_name, channel_name, key_phrase, true) do
-      with %{user_token: user_token, bot_name: bot_name} <-
-             Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-           {:ok, match_info} <-
-             Client.search_messages(
-               user_token,
-               "in:##{channel_name} from:#{bot_name} \"#{key_phrase}\""
-             ),
-           {:ok, key} <- parse_matches(match_info) do
-        {:ok, key |> Map.put(:server_name, server_name)}
-      else
-        nil -> {:error, "server_not_found_in_config"}
-        %{} -> {:error, "improper_config"}
-        err -> err
-      end
-    end
-
-    defp search(server_name, channel_name, key_phrase, false) do
-      with %{user_token: user_token} <-
-             Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-           {:ok, match_info} <-
-             Client.search_messages(user_token, "in:##{channel_name} \"#{key_phrase}\""),
-           {:ok, key} <- parse_matches(match_info) do
-        {:ok, key |> Map.put(:server_name, server_name)}
-      else
-        nil -> {:error, "server_not_found_in_config"}
-        %{} -> {:error, "improper_config"}
-        err -> err
-      end
-    end
-
-    defp parse_matches(%{"matches" => matches, "total" => total}) do
-      case total do
-        0 -> {:error, "no_search_matches"}
-        _number -> first_matched_schema(matches)
-      end
-    end
-
-    # recurses through an array of search results, creating a %SlackDB.Key{} out of the first one that matches the key schema
-    defp first_matched_schema([head]) do
-      Regex.named_captures(@key_schema, head["text"])
-      |> case do
-        nil ->
-          {:error, "no_search_result_matching_key_schema"}
-
-        %{
-          "key_phrase" => key_phrase,
-          "key_type" => key_type,
-          "more_metadata" => more_metadata
-        } ->
-          {:ok,
-           %SlackDB.Key{
-             key_phrase: key_phrase,
-             metadata: [
-               @emoji_to_metadata[key_type]
-               | Regex.scan(~r/:[^:]+:/, more_metadata)
-                 |> List.flatten()
-                 |> Enum.map(fn x -> @emoji_to_metadata[x] end)
-             ],
-             channel_id: head["channel"]["id"],
-             ts: head["ts"],
-             channel_name: head["channel"]["name"]
-           }}
-      end
-    end
-
-    defp first_matched_schema([head | tail]) do
-      Regex.named_captures(@key_schema, head["text"])
-      |> case do
-        nil ->
-          first_matched_schema(tail)
-
-        %{
-          "key_phrase" => key_phrase,
-          "key_type" => key_type,
-          "more_metadata" => more_metadata
-        } ->
-          {:ok,
-           %SlackDB.Key{
-             key_phrase: key_phrase,
-             metadata: [
-               @emoji_to_metadata[key_type]
-               | Regex.scan(~r/:[^:]+:/, more_metadata)
-                 |> List.flatten()
-                 |> Enum.map(fn x -> @emoji_to_metadata[x] end)
-             ],
-             channel_id: head["channel"]["id"],
-             ts: head["ts"],
-             channel_name: head["channel"]["name"]
-           }}
-      end
-    end
-
-    # required scopes: channels:history, groups:history
-    # uses: conversations.replies
-    @spec get_value(SlackDB.Key.t()) :: {:error, String.t()} | {:ok, value}
-    defp get_value(
-           %SlackDB.Key{server_name: server_name, metadata: [:single_front | _more_metadata]} =
-             key
-         ) do
-      with %{user_token: user_token} <-
-             Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-           {:ok, resp} <- Client.conversations_replies(user_token, key) do
-        case replies_cursor_pagination(user_token, key, [], resp) do
-          li when is_list(li) and length(li) > 0 -> {:ok, List.first(li)["text"]}
-          li when is_list(li) and length(li) == 0 -> {:error, "no_replies"}
-          _ -> {:error, "error_pulling_thread"}
-        end
-      else
-        nil -> {:error, "server_not_found_in_config"}
-        %{} -> {:error, "improper_config"}
-        err -> err
-      end
-    end
-
-    defp get_value(
-           %SlackDB.Key{server_name: server_name, metadata: [:single_back | _more_metadata]} = key
-         ) do
-      with %{user_token: user_token} <-
-             Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-           {:ok, %{"messages" => [_key_message | replies]}} <-
-             Client.conversations_replies(user_token, key, nil, 1) do
-        case replies do
-          [] -> {:error, "no_replies"}
-          [%{"text" => text}] -> {:ok, text}
-          _ -> {:error, "unexpected_reply_format"}
-        end
-      else
-        nil -> {:error, "server_not_found_in_config"}
-        %{} -> {:error, "improper_config"}
-        err -> err
-      end
-    end
-
-    defp get_value(
-           %SlackDB.Key{server_name: server_name, metadata: [:multiple | _more_metadata]} = key
-         ) do
-      with %{user_token: user_token} <-
-             Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-           {:ok, resp} <- Client.conversations_replies(user_token, key) do
-        {:ok,
-         replies_cursor_pagination(user_token, key, [], resp)
-         |> Enum.map(fn msg -> msg["text"] end)}
-      else
-        nil -> {:error, "server_not_found_in_config"}
-        %{} -> {:error, "improper_config"}
-        err -> err
-      end
-    end
-
-    defp get_value(
-           %SlackDB.Key{
-             server_name: server_name,
-             # channel_id: channel_id,
-             metadata: [:voting | _more_metadata]
-           } = key
-         ) do
-      with %{user_token: user_token} <-
-             Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-           {:ok, resp} <- Client.conversations_replies(user_token, key) do
-        {:ok,
-         replies_cursor_pagination(user_token, key, [], resp)
-         |> Enum.max_by(&tally_reactions/1)
-         |> Map.get("text")}
-      else
-        nil -> {:error, "server_not_found_in_config"}
-        %{} -> {:error, "improper_config"}
-        err -> err
-      end
-    end
-
-    # paginate through conversations.replies responeses and collect all replies to a key in a list, chronologically
-    defp replies_cursor_pagination(_user_token, _key, array, %{"has_more" => false} = response) do
-      [_key_message | replies] = response["messages"]
-      replies ++ array
-    end
-
-    defp replies_cursor_pagination(
-           user_token,
-           key,
-           array,
-           %{"has_more" => true, "response_metadata" => %{"next_cursor" => cursor}} = response
-         ) do
-      [_key_message | replies] = response["messages"]
-
-      with {:ok, next_response} <- Client.conversations_replies(user_token, key, cursor) do
-        replies_cursor_pagination(
-          user_token,
-          key,
-          replies ++ array,
-          next_response
-        )
-      end
-    end
-
-    # paginate through conversations.list responeses and collect public+private channels in a list
-    defp convo_cursor_pagination(
-           _user_token,
-           array,
-           %{"channels" => channels, "response_metadata" => %{"next_cursor" => ""}}
-         ) do
-      channels ++ array
-    end
-
-    defp convo_cursor_pagination(
-           user_token,
-           array,
-           %{"channels" => channels, "response_metadata" => %{"next_cursor" => cursor}}
-         ) do
-      with {:ok, next_response} <- Client.conversations_list(user_token, cursor) do
-        convo_cursor_pagination(
-          user_token,
-          channels ++ array,
-          next_response
-        )
-      end
-    end
-
-    defp post_thread(bot_token, channel_id, text, thread_ts) when is_binary(text),
-      do: post_thread(bot_token, channel_id, [text], thread_ts)
-
-    defp post_thread(bot_token, channel_id, [last_text], thread_ts),
-      do: [Client.chat_postMessage(bot_token, last_text, channel_id, thread_ts)]
-
-    defp post_thread(bot_token, channel_id, [first_text | more_posts], thread_ts) do
-      [
-        Client.chat_postMessage(bot_token, first_text, channel_id, thread_ts)
-        | post_thread(bot_token, channel_id, more_posts, thread_ts)
-      ]
-    end
-
-    # receives result from reactions.get call and outputs total reactions on the given message
-
-    defp tally_reactions(message_details) do
-      case message_details["reactions"] do
-        nil ->
-          0
-
-        reactions_list when is_list(reactions_list) ->
-          Enum.reduce(reactions_list, 0, fn react, acc -> react["count"] + acc end)
-      end
-    end
-
-    # like Kernel.put_in but it can add a k/v pair to an existing nested map rather than only update the value
-    defp put_kv_in(map, [], new_key, new_value),
-      do: Map.put(map, new_key, new_value)
-
-    defp put_kv_in(map, [head | tail], new_key, new_value) do
-      Map.put(map, head, put_kv_in(map[head], tail, new_key, new_value))
-    end
-
     defp populate_channels(map, [{server_name, state}]) do
-      put_kv_in(map, [server_name], :channels, state)
+      Utils.put_kv_in(map, [server_name], :channels, state)
     end
 
     defp populate_channels(map, [{server_name, state} | more_server_states]) do
-      put_kv_in(populate_channels(map, more_server_states), [server_name], :channels, state)
+      Utils.put_kv_in(populate_channels(map, more_server_states), [server_name], :channels, state)
     end
 
     defp initialize_supervisor_channel({server_name, {:ok, server_state}}) do
@@ -882,7 +613,7 @@ defmodule SlackDB do
                  server_name <> " #{@metadata_to_emoji[:single_back]}",
                  channel_id
                ),
-             _resp_list <- post_thread(bot_token, channel_id, "{}", thread_ts) do
+             _resp_list <- Utils.post_thread(bot_token, channel_id, "{}", thread_ts) do
           %{}
         else
           nil -> {:error, "server_not_found_in_config"}
@@ -891,22 +622,6 @@ defmodule SlackDB do
         end
 
       {server_name, init}
-    end
-
-    defp wipe_thread(user_token, key, include_key?) do
-      with {:ok, resp} <- Client.conversations_replies(user_token, key) do
-        case include_key? do
-          false -> replies_cursor_pagination(user_token, key, [], resp)
-          true -> replies_cursor_pagination(user_token, key, [%{"ts" => key.ts}], resp)
-        end
-        |> Flow.from_enumerable()
-        |> Flow.map(fn %{"ts" => ts} -> Client.chat_delete(user_token, key.channel_id, ts) end)
-        |> Enum.to_list()
-
-        # |> Enum.map(fn %{"ts" => ts} -> Client.chat_delete(user_token, key.channel_id, ts) end)
-      else
-        err -> err
-      end
     end
   end
 end

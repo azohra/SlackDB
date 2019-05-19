@@ -295,7 +295,7 @@ defmodule StatefulTest do
     ]
 
     # deletes 6 because conversations.replies is mocked to output a thread of 5 messages (and also deletes key)
-    assert wipe_thread(
+    assert SlackDB.Utils.wipe_thread(
              "xoxp",
              %SlackDB.Key{
                channel_id: "CFFD4EEMR",
@@ -309,7 +309,7 @@ defmodule StatefulTest do
            ) === ans
 
     # deletes 5 because conversations.replies is mocked to output a thread of 5 messages (doesnt delete key this time)
-    assert wipe_thread(
+    assert SlackDB.Utils.wipe_thread(
              "xoxp",
              %SlackDB.Key{
                channel_id: "CFFD4EEMR",

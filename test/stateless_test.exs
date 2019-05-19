@@ -6,7 +6,7 @@ defmodule StatelessTest do
   test "put_kv_in" do
     map1 = %{top: %{middle: %{}}}
 
-    map2 = put_kv_in(map1, [:top, :middle], :bottom, "hi")
+    map2 = SlackDB.Utils.put_kv_in(map1, [:top, :middle], :bottom, "hi")
 
     assert map2 === %{top: %{middle: %{bottom: "hi"}}}
   end
@@ -22,16 +22,17 @@ defmodule StatelessTest do
   end
 
   test "parse_matches and first_matched_schema" do
-    assert parse_matches(%{"total" => 0, "matches" => []}) === {:error, "no_search_matches"}
+    assert SlackDB.Utils.parse_matches(%{"total" => 0, "matches" => []}) ===
+             {:error, "no_search_matches"}
 
-    assert parse_matches(%{
+    assert SlackDB.Utils.parse_matches(%{
              "total" => 3,
              "matches" => [
                %{"text" => "keydoesntmatch:emoji:"}
              ]
            }) === {:error, "no_search_result_matching_key_schema"}
 
-    assert parse_matches(%{
+    assert SlackDB.Utils.parse_matches(%{
              "total" => 3,
              "matches" => [
                %{"text" => "keydoesntmatch:emoji:"},
@@ -55,9 +56,9 @@ defmodule StatelessTest do
   end
 
   test "tally_reactions" do
-    assert tally_reactions(%{"blah" => false}) === 0
+    assert SlackDB.Key.tally_reactions(%{"blah" => false}) === 0
 
-    assert tally_reactions(%{
+    assert SlackDB.Key.tally_reactions(%{
              "reactions" => [
                %{"count" => 1},
                %{"count" => 4}
