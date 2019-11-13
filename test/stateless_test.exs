@@ -15,7 +15,7 @@ defmodule StatelessTest do
     servers = %{"server1" => %{}, "server2" => %{}}
     server_states = [{"server1", %{"channel1" => "id"}}, {"server2", %{"channel1" => "id"}}]
 
-    assert populate_channels(servers, server_states) === %{
+    assert SlackDB.Server.populate_channels(servers, server_states) === %{
              "server1" => %{channels: %{"channel1" => "id"}},
              "server2" => %{channels: %{"channel1" => "id"}}
            }

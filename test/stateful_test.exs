@@ -22,24 +22,24 @@ defmodule StatefulTest do
         method: :post,
         url: "#{@s_url}/search.messages",
         body:
-          "highlight=false&query=in%3A%23sladckdb-admin+from%3AJeanie+%22server%22&sort=timestamp&sort_dir=desc"
+          "highlight=false&query=in%3A%23slackdb-admin+from%3AJeanie+%22server%22&sort=timestamp&sort_dir=desc"
       } ->
         %Tesla.Env{
           status: 200,
           body:
-            "{\"messages\":{\"matches\":[{\"channel\":{\"id\":\"CFC6MRQ06\",\"name\":\"sladckdb-admin\"},\"text\":\"server :monkey:\",\"ts\":\"1555913457.017900\"}],\"total\":1},\"ok\":true,\"query\":\"in:#sladckdb-admin from:@Jeanie\\\"server\\\"\"}"
+            "{\"messages\":{\"matches\":[{\"channel\":{\"id\":\"CFC6MRQ06\",\"name\":\"slackdb-admin\"},\"text\":\"server :monkey:\",\"ts\":\"1555913457.017900\"}],\"total\":1},\"ok\":true,\"query\":\"in:#slackdb-admin from:@Jeanie\\\"server\\\"\"}"
         }
 
       %{
         method: :post,
         url: "#{@s_url}/search.messages",
         body:
-          "highlight=false&query=in%3A%23sladckdb-new-admins+from%3AJeanie+%22un_initialized_server%22&sort=timestamp&sort_dir=desc"
+          "highlight=false&query=in%3A%23slackdb-new-admins+from%3AJeanie+%22un_initialized_server%22&sort=timestamp&sort_dir=desc"
       } ->
         %Tesla.Env{
           status: 200,
           body:
-            "{\"messages\":{\"matches\":[],\"total\":0},\"ok\":true,\"query\":\"in:#sladckdb-new-admins from:@Jeanie\\\"un_initialized_server\\\"\"}"
+            "{\"messages\":{\"matches\":[],\"total\":0},\"ok\":true,\"query\":\"in:#slackdb-new-admins from:@Jeanie\\\"un_initialized_server\\\"\"}"
         }
 
       %{
@@ -151,14 +151,14 @@ defmodule StatefulTest do
   end
 
   test "start_link" do
-    {:ok, _pid} = SlackDB.start_link()
+    {:ok, _pid} = SlackDB.Server.start_link()
 
     assert dump() === %{
              "server" => %{
                bot_token: "xoxb",
                user_token: "xoxp",
                bot_name: "Jeanie",
-               supervisor_channel_name: "sladckdb-admin",
+               supervisor_channel_name: "slackdb-admin",
                supervisor_channel_id: "CFC6MRQ06",
                channels: %{"random" => "random_id"}
              },
@@ -166,7 +166,7 @@ defmodule StatefulTest do
                bot_token: "xoxb",
                user_token: "xoxp",
                bot_name: "Jeanie",
-               supervisor_channel_name: "sladckdb-new-admins",
+               supervisor_channel_name: "slackdb-new-admins",
                supervisor_channel_id: "CFC6MRQ07",
                channels: %{}
              }
@@ -174,7 +174,7 @@ defmodule StatefulTest do
   end
 
   test "create" do
-    {:ok, _pid} = SlackDB.start_link()
+    {:ok, _pid} = SlackDB.Server.start_link()
 
     assert create("server", "not_in_state", "key_phrase", "value", :single_back) ===
              {:error, "channel_name_not_in_database"}
@@ -194,7 +194,7 @@ defmodule StatefulTest do
   end
 
   test "invite_to_channel" do
-    {:ok, _pid} = SlackDB.start_link()
+    {:ok, _pid} = SlackDB.Server.start_link()
 
     assert invite_to_channel("server", "not_in_state", "user_id") ===
              {:error, "channel_name_not_in_database"}
@@ -206,7 +206,7 @@ defmodule StatefulTest do
   end
 
   test "archive_channel" do
-    {:ok, _pid} = SlackDB.start_link()
+    {:ok, _pid} = SlackDB.Server.start_link()
 
     assert archive_channel("server", "random") ===
              {:ok,
@@ -215,7 +215,7 @@ defmodule StatefulTest do
                   bot_token: "xoxb",
                   user_token: "xoxp",
                   bot_name: "Jeanie",
-                  supervisor_channel_name: "sladckdb-admin",
+                  supervisor_channel_name: "slackdb-admin",
                   supervisor_channel_id: "CFC6MRQ06",
                   channels: %{}
                 },
@@ -223,7 +223,7 @@ defmodule StatefulTest do
                   bot_token: "xoxb",
                   user_token: "xoxp",
                   bot_name: "Jeanie",
-                  supervisor_channel_name: "sladckdb-new-admins",
+                  supervisor_channel_name: "slackdb-new-admins",
                   supervisor_channel_id: "CFC6MRQ07",
                   channels: %{}
                 }
@@ -231,7 +231,7 @@ defmodule StatefulTest do
   end
 
   test "new_channel" do
-    {:ok, _pid} = SlackDB.start_link()
+    {:ok, _pid} = SlackDB.Server.start_link()
 
     assert new_channel("server", "new_channel", false) ===
              {:ok,
@@ -241,7 +241,7 @@ defmodule StatefulTest do
                   bot_token: "xoxb",
                   channels: %{"new_channel" => "C012AB3CD", "random" => "random_id"},
                   supervisor_channel_id: "CFC6MRQ06",
-                  supervisor_channel_name: "sladckdb-admin",
+                  supervisor_channel_name: "slackdb-admin",
                   user_token: "xoxp"
                 },
                 "un_initialized_server" => %{
@@ -249,14 +249,14 @@ defmodule StatefulTest do
                   bot_token: "xoxb",
                   channels: %{},
                   supervisor_channel_id: "CFC6MRQ07",
-                  supervisor_channel_name: "sladckdb-new-admins",
+                  supervisor_channel_name: "slackdb-new-admins",
                   user_token: "xoxp"
                 }
               }}
   end
 
   test "include_channel" do
-    {:ok, _pid} = SlackDB.start_link()
+    {:ok, _pid} = SlackDB.Server.start_link()
 
     assert include_channel("server", "include") ===
              {:ok,
@@ -266,7 +266,7 @@ defmodule StatefulTest do
                   bot_token: "xoxb",
                   channels: %{"include" => "include_id", "random" => "random_id"},
                   supervisor_channel_id: "CFC6MRQ06",
-                  supervisor_channel_name: "sladckdb-admin",
+                  supervisor_channel_name: "slackdb-admin",
                   user_token: "xoxp"
                 },
                 "un_initialized_server" => %{
@@ -274,7 +274,7 @@ defmodule StatefulTest do
                   bot_token: "xoxb",
                   channels: %{},
                   supervisor_channel_id: "CFC6MRQ07",
-                  supervisor_channel_name: "sladckdb-new-admins",
+                  supervisor_channel_name: "slackdb-new-admins",
                   user_token: "xoxp"
                 }
               }}
