@@ -112,8 +112,8 @@ defmodule StatelessApiTest do
          ts: "1555913457.017900"
        }}
 
-    assert SlackDB.Utils.search("server", "general", "key", false) === ans
-    assert SlackDB.Utils.search("server", "general", "key", true) === ans
+    assert SlackDB.Search.search("server", "general", "key", false) === ans
+    assert SlackDB.Search.search("server", "general", "key", true) === ans
   end
 
   test "votable key" do
@@ -181,7 +181,7 @@ defmodule StatelessApiTest do
       }
     ]
 
-    assert SlackDB.Utils.post_thread("xoxb", "channel_id", "value", "thread_ts") === ans
+    assert SlackDB.Messages.post_thread("xoxb", "channel_id", "value", "thread_ts") === ans
     assert append("server", "general", "key", "value") === ans
   end
 
