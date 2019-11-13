@@ -328,8 +328,7 @@ defmodule SlackDB do
   def include_channel(server_name, channel_name) do
     with %{user_token: user_token, supervisor_channel_name: supervisor_channel_name} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, resp} <- Client.conversations_list(user_token),
-         convo_list <- Channels.get_all_convos(user_token, [], resp) do
+         convo_list <- Channels.get_all_convos(user_token) do
       case convo_list |> Enum.find(fn chnl -> chnl["name"] == channel_name end) do
         nil ->
           {:error, "channel_not_found"}
