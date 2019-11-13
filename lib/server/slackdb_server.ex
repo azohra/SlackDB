@@ -1,4 +1,6 @@
 defmodule SlackDB.Server do
+  @moduledoc false
+
   use GenServer
   use Private
 
@@ -19,6 +21,7 @@ defmodule SlackDB.Server do
   ####################################################################################
   ## GENSERVER CALLBACKS #############################################################
   ####################################################################################
+
   @impl true
   def init(config) do
     servers = Map.keys(config)

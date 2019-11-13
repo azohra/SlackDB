@@ -1,4 +1,6 @@
 defmodule SlackDB.Search do
+  @moduledoc false
+
   use Private
 
   alias SlackDB.Client
@@ -19,6 +21,8 @@ defmodule SlackDB.Search do
              "in:##{channel_name} from:#{bot_name} \"#{key_phrase}\""
            ),
          {:ok, key} <- parse_matches(match_info) do
+      # IO.inspect(match_info)
+      # IO.inspect(key)
       {:ok, key |> Map.put(:server_name, server_name)}
     else
       nil -> {:error, "server_not_found_in_config"}

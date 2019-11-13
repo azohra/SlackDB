@@ -48,13 +48,11 @@ defmodule SlackDB.Key do
       ) do
     with %{user_token: user_token} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, resp} <- Client.conversations_replies(user_token, key) do
-      case Messages.get_all_replies(user_token, key, [], resp) do
-        li when is_list(li) and length(li) > 0 -> {:ok, List.first(li)["text"]}
-        li when is_list(li) and length(li) == 0 -> {:error, "no_replies"}
-        _ -> {:error, "error_pulling_thread"}
-      end
+         [first_reply | _other_replies] <- Messages.get_all_replies(user_token, key) do
+      {:ok, first_reply["text"]}
+      # _ -> {:error, "error_pulling_thread"}
     else
+      [] -> {:error, "no_replies"}
       nil -> {:error, "server_not_found_in_config"}
       %{} -> {:error, "improper_config"}
       err -> err
@@ -85,10 +83,8 @@ defmodule SlackDB.Key do
       ) do
     with %{user_token: user_token} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, resp} <- Client.conversations_replies(user_token, key) do
-      {:ok,
-       Messages.get_all_replies(user_token, key, [], resp)
-       |> Enum.map(fn msg -> msg["text"] end)}
+         replies when is_list(replies) <- Messages.get_all_replies(user_token, key) do
+      {:ok, replies |> Enum.map(fn msg -> msg["text"] end)}
     else
       nil -> {:error, "server_not_found_in_config"}
       %{} -> {:error, "improper_config"}
@@ -105,9 +101,9 @@ defmodule SlackDB.Key do
       ) do
     with %{user_token: user_token} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, resp} <- Client.conversations_replies(user_token, key) do
+         replies when is_list(replies) <- Messages.get_all_replies(user_token, key) do
       {:ok,
-       Messages.get_all_replies(user_token, key, [], resp)
+       replies
        |> Enum.max_by(&tally_reactions/1)
        |> Map.get("text")}
     else
