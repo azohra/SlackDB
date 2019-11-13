@@ -6,16 +6,6 @@ defmodule SlackDB.Search do
 
   @emoji_list_regex ~r/:[^:]+:/
 
-  @emoji_to_metadata %{
-    ":thumbsup:" => :voting,
-    ":family:" => :multiple,
-    ":hear_no_evil:" => :single_front,
-    ":monkey:" => :single_back,
-    ":do_not_litter:" => :constant,
-    ":anchor:" => :undeletable
-    # ":octagonal_sign:" => :locked,
-  }
-
   @spec search(String.t(), String.t(), String.t(), boolean()) ::
           {:ok, SlackDB.Key.t()} | {:error, String.t()}
   def search(server_name, channel_name, key_phrase, only_bot?)
@@ -75,10 +65,10 @@ defmodule SlackDB.Search do
            %SlackDB.Key{
              key_phrase: key_phrase,
              metadata: [
-               @emoji_to_metadata[key_type]
+               Utils.emoji_to_metadata(key_type)
                | Regex.scan(@emoji_list_regex, more_metadata)
                  |> List.flatten()
-                 |> Enum.map(fn x -> @emoji_to_metadata[x] end)
+                 |> Enum.map(fn x -> Utils.emoji_to_metadata(x) end)
              ],
              channel_id: head["channel"]["id"],
              ts: head["ts"],
@@ -102,10 +92,10 @@ defmodule SlackDB.Search do
            %SlackDB.Key{
              key_phrase: key_phrase,
              metadata: [
-               @emoji_to_metadata[key_type]
+               Utils.emoji_to_metadata(key_type)
                | Regex.scan(@emoji_list_regex, more_metadata)
                  |> List.flatten()
-                 |> Enum.map(fn x -> @emoji_to_metadata[x] end)
+                 |> Enum.map(fn x -> Utils.emoji_to_metadata(x) end)
              ],
              channel_id: head["channel"]["id"],
              ts: head["ts"],

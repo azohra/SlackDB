@@ -5,7 +5,6 @@ defmodule SlackDB.Key do
   use Private
   alias SlackDB.Client
   alias SlackDB.Messages
-  alias SlackDB.Utils
 
   @typedoc """
   Types of SlackDB keys represented as atoms
