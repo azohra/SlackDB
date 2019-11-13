@@ -12,26 +12,31 @@ defmodule SlackDB do
   require Logger
   alias SlackDB.Client
   alias SlackDB.Utils
+  alias SlackDB.Messages
+  alias SlackDB.Search
   alias SlackDB.Key
+  alias SlackDB.Channels
 
-  @typedoc """
-  Types of SlackDB keys represented as atoms
+  # @typedoc """
+  # Types of SlackDB keys represented as atoms
 
-  Types
-    * `:voting` - replies to keys are treated as a ballot where reactions represent support for that particular value. winner takes all.
-    * `:multiple` - the reply thread represents an array that is returned in full and in chronological order
-    * `:single_front` - the first reply to the key is the value
-    * `:single_back` - the most recent reply to the key is the value
-  """
-  @type key_type :: :voting | :multiple | :single_front | :single_back
-  @typedoc """
-  More key metadata options represented as atoms
+  # Types
+  #   * `:voting` - replies to keys are treated as a ballot where reactions represent support for that particular value. winner takes all.
+  #   * `:multiple` - the reply thread represents an array that is returned in full and in chronological order
+  #   * `:single_front` - the first reply to the key is the value
+  #   * `:single_back` - the most recent reply to the key is the value
+  # """
+  # @type key_type :: :voting | :multiple | :single_front | :single_back
 
-  Types
-    * `:constant` - key cannot changed after creation (save for deletion)
-    * `:undeletable` - key cannot be deleted (through this API)
-  """
-  @type more_metadata :: :constant | :undeletable
+  # @typedoc """
+  # More key metadata options represented as atoms
+
+  # Types
+  #   * `:constant` - key cannot changed after creation (save for deletion)
+  #   * `:undeletable` - key cannot be deleted (through this API)
+  # """
+  # @type more_metadata :: :constant | :undeletable
+
   @typedoc """
   Represents the types of values that keys can hold. Since all values are stored in Slack,
   they are all returned as strings (or a list of strings in the case of key_type `:multiple`)
@@ -44,8 +49,8 @@ defmodule SlackDB do
     single_front: ":hear_no_evil:",
     single_back: ":monkey:",
     constant: ":do_not_litter:",
-    # locked: ":octagonal_sign:",
     undeletable: ":anchor:"
+    # locked: ":octagonal_sign:",
   }
   ####################################################################################
   ## PUBLIC API ######################################################################
@@ -94,8 +99,8 @@ defmodule SlackDB do
           String.t(),
           String.t(),
           value(),
-          key_type(),
-          list(more_metadata())
+          SlackDB.Key.type(),
+          list(SlackDB.Key.more_metadata())
         ) :: {:error, String.t()} | list(tuple())
   def create(server_name, channel_name, key_phrase, value, key_type, add_metadata \\ [])
 
@@ -154,7 +159,7 @@ defmodule SlackDB do
   @spec read(String.t(), String.t(), String.t(), boolean()) ::
           {:error, String.t()} | {:ok, value()}
   def read(server_name, channel_name, key_phrase, only_bot? \\ true) do
-    with {:ok, key} <- Utils.search(server_name, channel_name, key_phrase, only_bot?) do
+    with {:ok, key} <- Search.search(server_name, channel_name, key_phrase, only_bot?) do
       # IO.inspect(key)
       Key.get_value(key)
     else
@@ -189,14 +194,14 @@ defmodule SlackDB do
   def update(server_name, channel_name, key_phrase, values) when is_list(values) do
     with %{bot_token: bot_token, user_token: user_token} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, key} <- Utils.search(server_name, channel_name, key_phrase, false) do
+         {:ok, key} <- Search.search(server_name, channel_name, key_phrase, false) do
       cond do
         :constant in key.metadata ->
           {:error, "cannot_update_constant_key"}
 
         true ->
-          Utils.wipe_thread(user_token, key, false)
-          Utils.post_thread(bot_token, key.channel_id, values, key.ts)
+          Messages.wipe_thread(user_token, key, false)
+          Messages.post_thread(bot_token, key.channel_id, values, key.ts)
       end
     else
       nil -> {:error, "server_not_found_in_config"}
@@ -228,10 +233,10 @@ defmodule SlackDB do
   def delete(server_name, channel_name, key_phrase) do
     with %{user_token: user_token} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, key} <- Utils.search(server_name, channel_name, key_phrase, false) do
+         {:ok, key} <- Search.search(server_name, channel_name, key_phrase, false) do
       cond do
         :undeletable in key.metadata -> {:error, "cannot_delete_undeletable_key"}
-        true -> Utils.wipe_thread(user_token, key, true)
+        true -> Messages.wipe_thread(user_token, key, true)
       end
     else
       nil -> {:error, "server_not_found_in_config"}
@@ -269,13 +274,13 @@ defmodule SlackDB do
   def append(server_name, channel_name, key_phrase, values) when is_list(values) do
     with %{bot_token: bot_token} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, key} <- Utils.search(server_name, channel_name, key_phrase, true) do
+         {:ok, key} <- Search.search(server_name, channel_name, key_phrase, true) do
       cond do
         :constant in key.metadata ->
           {:error, "cannot_append_to_constant_key"}
 
         true ->
-          Utils.post_thread(bot_token, key.channel_id, values, key.ts)
+          Messages.post_thread(bot_token, key.channel_id, values, key.ts)
       end
     else
       nil -> {:error, "server_not_found_in_config"}
@@ -334,7 +339,7 @@ defmodule SlackDB do
     with %{user_token: user_token, supervisor_channel_name: supervisor_channel_name} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
          {:ok, resp} <- Client.conversations_list(user_token),
-         convo_list <- Utils.get_all_convos(user_token, [], resp) do
+         convo_list <- Channels.get_all_convos(user_token, [], resp) do
       case convo_list |> Enum.find(fn chnl -> chnl["name"] == channel_name end) do
         nil ->
           {:error, "channel_not_found"}
@@ -513,7 +518,7 @@ defmodule SlackDB do
                      key_phrase <> " #{metadata_as_emojis}",
                      channel_id
                    ) do
-              Utils.post_thread(bot_token, channel_id, values, thread_ts)
+              Messages.post_thread(bot_token, channel_id, values, thread_ts)
             else
               err -> err
             end
@@ -613,7 +618,7 @@ defmodule SlackDB do
                  server_name <> " #{@metadata_to_emoji[:single_back]}",
                  channel_id
                ),
-             _resp_list <- Utils.post_thread(bot_token, channel_id, "{}", thread_ts) do
+             _resp_list <- Messages.post_thread(bot_token, channel_id, "{}", thread_ts) do
           %{}
         else
           nil -> {:error, "server_not_found_in_config"}

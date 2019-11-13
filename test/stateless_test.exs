@@ -22,17 +22,17 @@ defmodule StatelessTest do
   end
 
   test "parse_matches and first_matched_schema" do
-    assert SlackDB.Utils.parse_matches(%{"total" => 0, "matches" => []}) ===
+    assert SlackDB.Search.parse_matches(%{"total" => 0, "matches" => []}) ===
              {:error, "no_search_matches"}
 
-    assert SlackDB.Utils.parse_matches(%{
+    assert SlackDB.Search.parse_matches(%{
              "total" => 3,
              "matches" => [
                %{"text" => "keydoesntmatch:emoji:"}
              ]
            }) === {:error, "no_search_result_matching_key_schema"}
 
-    assert SlackDB.Utils.parse_matches(%{
+    assert SlackDB.Search.parse_matches(%{
              "total" => 3,
              "matches" => [
                %{"text" => "keydoesntmatch:emoji:"},

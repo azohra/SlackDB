@@ -4,7 +4,28 @@ defmodule SlackDB.Key do
   """
   use Private
   alias SlackDB.Client
+  alias SlackDB.Messages
   alias SlackDB.Utils
+
+  @typedoc """
+  Types of SlackDB keys represented as atoms
+
+  Types
+    * `:voting` - replies to keys are treated as a ballot where reactions represent support for that particular value. winner takes all.
+    * `:multiple` - the reply thread represents an array that is returned in full and in chronological order
+    * `:single_front` - the first reply to the key is the value
+    * `:single_back` - the most recent reply to the key is the value
+  """
+  @type type :: :voting | :multiple | :single_front | :single_back
+
+  @typedoc """
+  More key metadata options represented as atoms
+
+  Types
+    * `:constant` - key cannot changed after creation (save for deletion)
+    * `:undeletable` - key cannot be deleted (through this API)
+  """
+  @type more_metadata :: :constant | :undeletable
 
   @typedoc """
   A map containing the necessary attributes to identify keys uniquely
@@ -13,7 +34,7 @@ defmodule SlackDB.Key do
           channel_id: String.t(),
           ts: String.t(),
           key_phrase: String.t(),
-          metadata: [SlackDB.key_type() | list(SlackDB.more_metadata())],
+          metadata: [type() | list(more_metadata())],
           server_name: String.t(),
           channel_name: String.t()
         }
@@ -29,7 +50,7 @@ defmodule SlackDB.Key do
     with %{user_token: user_token} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
          {:ok, resp} <- Client.conversations_replies(user_token, key) do
-      case Utils.get_all_replies(user_token, key, [], resp) do
+      case Messages.get_all_replies(user_token, key, [], resp) do
         li when is_list(li) and length(li) > 0 -> {:ok, List.first(li)["text"]}
         li when is_list(li) and length(li) == 0 -> {:error, "no_replies"}
         _ -> {:error, "error_pulling_thread"}
@@ -67,7 +88,7 @@ defmodule SlackDB.Key do
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
          {:ok, resp} <- Client.conversations_replies(user_token, key) do
       {:ok,
-       Utils.get_all_replies(user_token, key, [], resp)
+       Messages.get_all_replies(user_token, key, [], resp)
        |> Enum.map(fn msg -> msg["text"] end)}
     else
       nil -> {:error, "server_not_found_in_config"}
@@ -87,7 +108,7 @@ defmodule SlackDB.Key do
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
          {:ok, resp} <- Client.conversations_replies(user_token, key) do
       {:ok,
-       Utils.get_all_replies(user_token, key, [], resp)
+       Messages.get_all_replies(user_token, key, [], resp)
        |> Enum.max_by(&tally_reactions/1)
        |> Map.get("text")}
     else
