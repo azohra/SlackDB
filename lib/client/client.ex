@@ -1,18 +1,40 @@
 defmodule SlackDB.Client do
   @moduledoc false
-  require Logger
+
   use Tesla
+
+  require Logger
+
+  @callback search_messages(String.t(), String.t()) ::
+              {:error, any()} | {:ok, map()}
+  @callback chat_postMessage(String.t(), String.t(), String.t(), String.t() | atom()) ::
+              {:error, any()} | {:ok, map()}
+  @callback chat_delete(String.t(), String.t(), String.t()) ::
+              {:error, any()} | {:ok, map()}
+  @callback conversations_create(String.t(), String.t(), boolean()) ::
+              {:error, any()} | {:ok, map()}
+  @callback conversations_archive(String.t(), String.t()) ::
+              {:error, any()} | {:ok, map()}
+  @callback conversations_invite(String.t(), String.t(), String.t()) ::
+              {:error, any()} | {:ok, map()}
+  @callback conversations_list(String.t(), String.t() | atom(), number()) ::
+              {:error, any()} | {:ok, map()}
+  @callback conversations_replies(String.t(), SlackDB.Key.t(), String.t() | atom(), number()) ::
+              {:error, any()} | {:ok, map()}
+
   @base_url "https://slack.com/api"
 
-  @spec search_messages(String.t(), String.t()) :: {:error, any()} | {:ok, map()}
-  def search_messages(user_token, query) do
+  @spec search_messages(String.t(), String.t(), keyword()) :: {:error, any()} | {:ok, map()}
+  def search_messages(user_token, query, opts \\ []) do
     with {:ok, resp} <-
            client(user_token)
            |> post("/search.messages", %{
              query: query,
              highlight: false,
              sort: "timestamp",
-             sort_dir: "desc"
+             sort_dir: "desc",
+             page: Keyword.get(opts, :page, 1)
+             #  count: 2,
            }) do
       case resp.body |> Jason.decode!() do
         %{"ok" => true, "messages" => messages} -> {:ok, messages}
@@ -168,6 +190,14 @@ defmodule SlackDB.Client do
     ]
 
     Tesla.client(middleware)
+  end
+
+  defp parse_slack_response(resp, pull_key) do
+    case resp.body |> Jason.decode!() do
+      %{"ok" => true} = body -> {:ok, body}
+      %{"ok" => false, "error" => error} -> {:error, error}
+      _ -> {:error, resp.status}
+    end
   end
 
   # def get_message(token, channel, ts) do
