@@ -8,6 +8,8 @@ defmodule SlackDB.Search do
 
   @emoji_list_regex ~r/:[^:]+:/
 
+  defp client(), do: Application.get_env(:slackdb, :client_adapter, Client)
+
   @spec search(String.t(), String.t(), String.t(), boolean()) ::
           {:ok, SlackDB.Key.t()} | {:error, String.t()}
   def search(server_name, channel_name, key_phrase, only_bot? \\ true)
@@ -54,60 +56,53 @@ defmodule SlackDB.Search do
     end
   end
 
-  private do
-    defp pagination_search(user_token, channel_name, query, key_phrase, page \\ 1) do
-      IO.inspect(page, label: "searching nextpage: ")
+  defp pagination_search(user_token, channel_name, query, key_phrase, page \\ 1) do
+    with {:ok, %{"matches" => matches, "pagination" => pagination}} <-
+           client().search_messages(user_token, query, page: page) do
+      case find_first_match(matches, key_phrase) do
+        {:ok, key} ->
+          {:ok, key}
 
-      with {:ok, %{"matches" => matches, "pagination" => pagination}} <-
-             Client.search_messages(user_token, query, page: page) do
-        case find_first_match(matches, key_phrase) do
-          {:ok, key} ->
-            IO.inspect(page, label: "found key on page: ")
-            {:ok, key}
-
-          {:error, msg} ->
-            if pagination["page"] < pagination["page_count"] do
-              IO.inspect("not found on this page, go next")
-              pagination_search(user_token, channel_name, query, key_phrase, page + 1)
-            else
-              IO.inspect("nothing on last page")
-              {:error, msg}
-            end
-        end
+        {:error, msg} ->
+          if pagination["page"] < pagination["page_count"] do
+            pagination_search(user_token, channel_name, query, key_phrase, page + 1)
+          else
+            {:error, msg}
+          end
       end
     end
+  end
 
-    defp find_first_match([], _key_phrase) do
-      {:error, "found_no_matches"}
-    end
+  defp find_first_match([], _key_phrase) do
+    {:error, "found_no_matches"}
+  end
 
-    defp find_first_match([head | tail], key_phrase) do
-      case Utils.check_schema(head["text"]) do
-        %{
-          "key_phrase" => ^key_phrase,
-          "key_type" => key_type,
-          "more_metadata" => more_metadata
-        } ->
-          {:ok,
-           %SlackDB.Key{
-             key_phrase: key_phrase,
-             metadata: [
-               Utils.emoji_to_metadata(key_type)
-               | Regex.scan(@emoji_list_regex, more_metadata)
-                 |> List.flatten()
-                 |> Enum.map(fn x -> Utils.emoji_to_metadata(x) end)
-             ],
-             channel_id: head["channel"]["id"],
-             ts: head["ts"],
-             channel_name: head["channel"]["name"]
-           }}
+  defp find_first_match([head | tail], key_phrase) do
+    case Utils.check_schema(head["text"]) do
+      %{
+        "key_phrase" => ^key_phrase,
+        "key_type" => key_type,
+        "more_metadata" => more_metadata
+      } ->
+        {:ok,
+         %SlackDB.Key{
+           key_phrase: key_phrase,
+           metadata: [
+             Utils.emoji_to_metadata(key_type)
+             | Regex.scan(@emoji_list_regex, more_metadata)
+               |> List.flatten()
+               |> Enum.map(fn x -> Utils.emoji_to_metadata(x) end)
+           ],
+           channel_id: head["channel"]["id"],
+           ts: head["ts"],
+           channel_name: head["channel"]["name"]
+         }}
 
-        # either this message isn't a key or
-        # it is a key and it's the incorrect phrase
-        # we should continue to search
-        _else ->
-          find_first_match(tail, key_phrase)
-      end
+      # either this message isn't a key or
+      # it is a key and it's the incorrect phrase
+      # we should continue to search
+      _else ->
+        find_first_match(tail, key_phrase)
     end
   end
 end
