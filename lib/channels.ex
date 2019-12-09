@@ -3,37 +3,29 @@ defmodule SlackDB.Channels do
 
   alias SlackDB.Client
 
-  @callback get_all_convos(String.t()) :: list(map())
+  @callback get_all_convos(String.t(), :bot_token | :user_token) ::
+              {:error, any()} | {:ok, list(map())}
 
-  def get_all_convos(user_token) do
-    with {:ok, resp} <- Client.conversations_list(user_token) do
-      paginate_convos(user_token, [], resp)
+  defp client(), do: Application.get_env(:slackdb, :client_adapter, Client)
+
+  def get_all_convos(server_name, token_type \\ :user_token) do
+    with token when is_binary(token) <-
+           Application.get_env(:slackdb, :servers) |> get_in([server_name, token_type]) do
+      paginate_convos(token, nil, [])
     else
-      err -> err
+      _err -> {:error, "improper_config"}
     end
   end
 
   # paginate through conversations.list responeses and collect public+private channels in a list
   # each element of the list is a map containing data about the channel shown at this doc https://api.slack.com/methods/conversations.list
-  defp paginate_convos(
-         _user_token,
-         array,
-         %{"channels" => channels, "response_metadata" => %{"next_cursor" => ""}}
-       ) do
-    channels ++ array
-  end
-
-  defp paginate_convos(
-         user_token,
-         array,
-         %{"channels" => channels, "response_metadata" => %{"next_cursor" => cursor}}
-       ) do
-    with {:ok, next_response} <- Client.conversations_list(user_token, cursor) do
-      paginate_convos(
-        user_token,
-        channels ++ array,
-        next_response
-      )
+  defp paginate_convos(token, cursor, list) do
+    with {:ok, resp} <- client().conversations_list(token, cursor) |> IO.inspect() do
+      case get_in(resp, ["response_metadata", "next_cursor"]) do
+        nil -> {:error, "response_parse_error"}
+        "" -> {:ok, list ++ resp["channels"]}
+        cursor -> paginate_convos(token, cursor, list ++ resp["channels"])
+      end
     end
   end
 end
