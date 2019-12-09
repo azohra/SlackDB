@@ -10,33 +10,42 @@ defmodule SlackDB.Search do
 
   @spec search(String.t(), String.t(), String.t(), boolean()) ::
           {:ok, SlackDB.Key.t()} | {:error, String.t()}
-  def search(server_name, channel_name, key_phrase, only_bot?)
+  def search(server_name, channel_name, key_phrase, only_bot? \\ true)
 
   def search(server_name, channel_name, key_phrase, true) do
-    with %{user_token: user_token, bot_name: bot_name} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, match_info} <-
-           Client.search_messages(
-             user_token,
-             "in:##{channel_name} from:#{bot_name} \"#{key_phrase}\""
-           ),
-         {:ok, key} <- parse_matches(match_info) do
-      # IO.inspect(match_info)
-      # IO.inspect(key)
-      {:ok, key |> Map.put(:server_name, server_name)}
+    with %{bot_name: bot_name} <-
+           Application.get_env(:slackdb, :servers) |> Map.get(server_name) do
+      search_query(
+        server_name,
+        channel_name,
+        "in:##{channel_name} from:#{bot_name} \"#{key_phrase}\"",
+        key_phrase
+      )
     else
       nil -> {:error, "server_not_found_in_config"}
       %{} -> {:error, "improper_config"}
-      err -> err
     end
   end
 
   def search(server_name, channel_name, key_phrase, false) do
+    search_query(
+      server_name,
+      channel_name,
+      "in:##{channel_name} \"#{key_phrase}\"",
+      key_phrase
+    )
+  end
+
+  def search_query(server_name, channel_name, query, key_phrase) do
     with %{user_token: user_token} <-
            Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, match_info} <-
-           Client.search_messages(user_token, "in:##{channel_name} \"#{key_phrase}\""),
-         {:ok, key} <- parse_matches(match_info) do
+         {:ok, key} <-
+           pagination_search(
+             user_token,
+             channel_name,
+             query,
+             key_phrase
+           ) do
       {:ok, key |> Map.put(:server_name, server_name)}
     else
       nil -> {:error, "server_not_found_in_config"}
@@ -46,22 +55,36 @@ defmodule SlackDB.Search do
   end
 
   private do
-    defp parse_matches(%{"matches" => matches, "total" => total}) do
-      case total do
-        0 -> {:error, "no_search_matches"}
-        _number -> first_matched_schema(matches)
+    defp pagination_search(user_token, channel_name, query, key_phrase, page \\ 1) do
+      IO.inspect(page, label: "searching nextpage: ")
+
+      with {:ok, %{"matches" => matches, "pagination" => pagination}} <-
+             Client.search_messages(user_token, query, page: page) do
+        case find_first_match(matches, key_phrase) do
+          {:ok, key} ->
+            IO.inspect(page, label: "found key on page: ")
+            {:ok, key}
+
+          {:error, msg} ->
+            if pagination["page"] < pagination["page_count"] do
+              IO.inspect("not found on this page, go next")
+              pagination_search(user_token, channel_name, query, key_phrase, page + 1)
+            else
+              IO.inspect("nothing on last page")
+              {:error, msg}
+            end
+        end
       end
     end
 
-    # recurses through an array of search results, creating a %SlackDB.Key{} out of the first one that matches the key schema
-    defp first_matched_schema([head]) do
-      Utils.check_schema(head["text"])
-      |> case do
-        nil ->
-          {:error, "no_search_result_matching_key_schema"}
+    defp find_first_match([], _key_phrase) do
+      {:error, "found_no_matches"}
+    end
 
+    defp find_first_match([head | tail], key_phrase) do
+      case Utils.check_schema(head["text"]) do
         %{
-          "key_phrase" => key_phrase,
+          "key_phrase" => ^key_phrase,
           "key_type" => key_type,
           "more_metadata" => more_metadata
         } ->
@@ -78,33 +101,12 @@ defmodule SlackDB.Search do
              ts: head["ts"],
              channel_name: head["channel"]["name"]
            }}
-      end
-    end
 
-    defp first_matched_schema([head | tail]) do
-      Utils.check_schema(head["text"])
-      |> case do
-        nil ->
-          first_matched_schema(tail)
-
-        %{
-          "key_phrase" => key_phrase,
-          "key_type" => key_type,
-          "more_metadata" => more_metadata
-        } ->
-          {:ok,
-           %SlackDB.Key{
-             key_phrase: key_phrase,
-             metadata: [
-               Utils.emoji_to_metadata(key_type)
-               | Regex.scan(@emoji_list_regex, more_metadata)
-                 |> List.flatten()
-                 |> Enum.map(fn x -> Utils.emoji_to_metadata(x) end)
-             ],
-             channel_id: head["channel"]["id"],
-             ts: head["ts"],
-             channel_name: head["channel"]["name"]
-           }}
+        # either this message isn't a key or
+        # it is a key and it's the incorrect phrase
+        # we should continue to search
+        _else ->
+          find_first_match(tail, key_phrase)
       end
     end
   end
