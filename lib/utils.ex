@@ -1,7 +1,7 @@
 defmodule SlackDB.Utils do
   @moduledoc false
 
-  @emoji_list_regex ~r/:[^:]+:/
+  # @emoji_list_regex ~r/:[^:]+:/
 
   @key_type_regex ":thumbsup:|:family:|:hear_no_evil:|:monkey:"
   @key_schema ~r/(?<key_phrase>.+)\s(?<key_type>#{@key_type_regex})(?<more_metadata>.*)/
@@ -33,16 +33,29 @@ defmodule SlackDB.Utils do
   ## SLACKDB HELPERS #################################################################
   ####################################################################################
 
+  @spec get_tokens(term(), list(atom())) :: list() | {:error, String.t()}
+  def get_tokens(server_name, key_list) do
+    try do
+      server =
+        Application.get_env(:slackdb, :servers)
+        |> Map.fetch!(server_name)
+
+      for key <- key_list, do: Map.fetch!(server, key)
+    rescue
+      e in KeyError -> {:error, "KeyError: couldn't find key #{e.key}"}
+    end
+  end
+
   def check_schema(phrase) do
     Regex.named_captures(@key_schema, phrase)
   end
 
   def metadata_to_emoji(metadata) when is_atom(metadata) do
-    @metadata_to_emoji[metadata]
+    Map.get(@metadata_to_emoji, metadata, ":question:")
   end
 
   def emoji_to_metadata(emoji) when is_binary(emoji) do
-    @emoji_to_metadata[emoji]
+    Map.get(@emoji_to_metadata, emoji, :unknown_emoji)
   end
 
   ####################################################################################
