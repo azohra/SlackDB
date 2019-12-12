@@ -70,7 +70,7 @@ defmodule SlackDB.Server do
                      key_phrase <> " #{metadata_as_emojis}",
                      channel_id
                    ) do
-              Messages.post_thread(bot_token, channel_id, values, thread_ts)
+              Messages.post_thread(bot_token, channel_id, thread_ts, values)
             else
               err -> err
             end
@@ -105,7 +105,7 @@ defmodule SlackDB.Server do
   end
 
   def handle_call({:put_channel, server_name, channel_name, channel_id}, _from, state) do
-    new_state = state |> Utils.put_kv_in([server_name, :channels], channel_name, channel_id)
+    new_state = state |> put_in([server_name, :channels, channel_name], channel_id)
     {:reply, {:ok, new_state}, new_state}
   end
 
@@ -146,11 +146,12 @@ defmodule SlackDB.Server do
 
   private do
     defp populate_channels(map, [{server_name, state}]) do
-      Utils.put_kv_in(map, [server_name], :channels, state)
+      put_in(map, [server_name, :channels], state)
     end
 
     defp populate_channels(map, [{server_name, state} | more_server_states]) do
-      Utils.put_kv_in(populate_channels(map, more_server_states), [server_name], :channels, state)
+      populate_channels(map, more_server_states)
+      |> put_in([server_name, :channels], state)
     end
 
     defp initialize_supervisor_channel({server_name, {:ok, server_state}}) do
@@ -162,15 +163,15 @@ defmodule SlackDB.Server do
 
     defp initialize_supervisor_channel({server_name, {:error, _error_message}}) do
       init =
-        with %{bot_token: bot_token, supervisor_channel_id: channel_id} <-
-               Application.get_env(:slackdb, :servers) |> Map.get(server_name),
+        with [bot_token, sprvsr_chnl_id] <-
+               Utils.get_tokens(server_name, [:bot_token, :supervisor_channel_id]),
              {:ok, %{"ts" => thread_ts}} <-
                Client.chat_postMessage(
                  bot_token,
                  server_name <> " #{Utils.metadata_to_emoji(:single_back)}",
-                 channel_id
+                 sprvsr_chnl_id
                ),
-             _resp_list <- Messages.post_thread(bot_token, channel_id, "{}", thread_ts) do
+             _resp_list <- Messages.post_thread(bot_token, sprvsr_chnl_id, thread_ts, "{}") do
           %{}
         else
           nil -> {:error, "server_not_found_in_config"}
