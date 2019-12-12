@@ -2,34 +2,64 @@ defmodule SlackDB.Messages do
   @moduledoc false
 
   alias SlackDB.Client
+  alias SlackDB.Utils
 
-  @callback get_all_replies(String.t(), SlackDB.Key.t()) :: list(map)
-  @callback wipe_thread(String.t(), SlackDB.Key.t(), boolean()) :: list(tuple())
-  @callback post_thread(String.t(), list(String.t()) | String.t(), String.t(), String.t()) ::
-              list(tuple())
+  @callback get_all_replies(SlackDB.Key.t(), :bot_token | :user_token) ::
+              {:ok, list(map())} | {:error, String.t()}
+  @callback wipe_thread(String.t(), SlackDB.Key.t(), boolean()) ::
+              list(tuple()) | {:error, String.t()}
+  @callback post_thread(String.t(), String.t(), String.t(), list(String.t()) | String.t()) ::
+              list(tuple()) | {:error, String.t()}
 
-  def post_thread(bot_token, channel_id, text, thread_ts) when is_binary(text),
-    do: post_thread(bot_token, channel_id, [text], thread_ts)
+  def post_thread(key, values) do
+    with [bot_token] <- Utils.get_tokens(key.server_name, [:bot_token]) do
+      post_thread(bot_token, key.channel_id, key.ts, values)
+    else
+      err -> err
+    end
+  end
 
-  def post_thread(bot_token, channel_id, [last_text], thread_ts),
-    do: [Client.chat_postMessage(bot_token, last_text, channel_id, thread_ts)]
+  def post_thread(bot_token, channel_id, thread_ts, values) when is_binary(values),
+    do: post_thread(bot_token, channel_id, thread_ts, [values])
 
-  def post_thread(bot_token, channel_id, [first_text | more_posts], thread_ts) do
+  def post_thread(bot_token, channel_id, thread_ts, values) when is_list(values) do
+    post_thread_recurse(bot_token, channel_id, thread_ts, values)
+  end
+
+  defp post_thread_recurse(_bot_token, _channel_id, _thread_ts, []), do: []
+
+  defp post_thread_recurse(bot_token, channel_id, thread_ts, [hd_msg | tail]) do
     [
-      Client.chat_postMessage(bot_token, first_text, channel_id, thread_ts)
-      | post_thread(bot_token, channel_id, more_posts, thread_ts)
+      Client.chat_postMessage(bot_token, hd_msg, channel_id, thread_ts)
+      | post_thread_recurse(bot_token, channel_id, thread_ts, tail)
     ]
   end
 
-  def wipe_thread(user_token, key, include_key?) do
-    with replies when is_list(replies) <- get_all_replies(user_token, key) do
-      case include_key? do
-        false -> replies
-        true -> [%{"ts" => key.ts} | replies]
-      end
-      |> Flow.from_enumerable()
-      |> Flow.map(fn %{"ts" => ts} -> Client.chat_delete(user_token, key.channel_id, ts) end)
-      |> Enum.to_list()
+  @doc """
+  Note: just because you get an ok doesn't mean every request was successful
+
+  ## Options
+  * `:include_key?` - boolean, default is true
+  * `:token_type` - `:bot_token` or `user_token`, default is `user_token`
+  """
+  @spec wipe_thread(SlackDB.Key.t(), keyword()) ::
+          {:ok, list(map())} | {:error, binary}
+  def wipe_thread(key, opts \\ []) do
+    token_type = Keyword.get(opts, :token_type, :user_token)
+
+    with [token] <- Utils.get_tokens(key.server_name, [token_type]),
+         {:ok, replies} <-
+           get_all_replies(key, token_type) do
+      result =
+        case Keyword.get(opts, :include_key?, true) do
+          false -> replies
+          true -> [%{"ts" => key.ts} | replies]
+        end
+        |> Flow.from_enumerable()
+        |> Flow.map(fn %{"ts" => ts} -> Client.chat_delete(token, key.channel_id, ts) end)
+        |> Enum.to_list()
+
+      {:ok, result}
 
       # |> Enum.map(fn %{"ts" => ts} -> Client.chat_delete(user_token, key.channel_id, ts) end)
     else
@@ -37,36 +67,31 @@ defmodule SlackDB.Messages do
     end
   end
 
-  def get_all_replies(user_token, key) do
-    with {:ok, resp} <- Client.conversations_replies(user_token, key) do
-      paginate_replies(user_token, key, [], resp)
+  @doc """
+  ## Options
+  * `:token_type` - `:bot_token` or `user_token`, default is `user_token`
+  """
+  @spec get_all_replies(SlackDB.Key.t(), keyword()) ::
+          {:ok, list(map())} | {:error, String.t()}
+  def get_all_replies(key, opts \\ []) do
+    token_type = Keyword.get(opts, :token_type, :user_token)
+
+    with [token] <- Utils.get_tokens(key.server_name, [token_type]) do
+      paginate_replies(token, nil, key, [])
     else
-      err -> err
+      e -> e
     end
   end
 
-  # paginate through conversations.replies responeses and collect all replies to a key in a list, chronologically
-  # ignores first element of the replies list because it's always the 'key' message
-  defp paginate_replies(_user_token, _key, array, %{"has_more" => false} = response) do
-    [_key_message | replies] = response["messages"]
-    replies ++ array
-  end
-
-  defp paginate_replies(
-         user_token,
-         key,
-         array,
-         %{"has_more" => true, "response_metadata" => %{"next_cursor" => cursor}} = response
-       ) do
-    [_key_message | replies] = response["messages"]
-
-    with {:ok, next_response} <- Client.conversations_replies(user_token, key, cursor) do
-      paginate_replies(
-        user_token,
-        key,
-        replies ++ array,
-        next_response
-      )
+  # paginate through conversations.list responeses and collect public+private channels in a list
+  # each element of the list is a map containing data about the channel shown at this doc https://api.slack.com/methods/conversations.replies
+  defp paginate_replies(token, cursor, key, list) do
+    with {:ok, resp} <- Client.conversations_replies(token, key, cursor) do
+      case get_in(resp, ["response_metadata", "next_cursor"]) do
+        # notice how it's added in chunks in reverse order
+        nil -> {:ok, tl(resp["messages"]) ++ list}
+        cursor -> paginate_replies(token, cursor, key, list ++ tl(resp["messages"]))
+      end
     end
   end
 end

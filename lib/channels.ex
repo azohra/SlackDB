@@ -2,18 +2,26 @@ defmodule SlackDB.Channels do
   @moduledoc false
 
   alias SlackDB.Client
+  alias SlackDB.Utils
 
   @callback get_all_convos(String.t(), :bot_token | :user_token) ::
               {:error, any()} | {:ok, list(map())}
 
   defp client(), do: Application.get_env(:slackdb, :client_adapter, Client)
 
-  def get_all_convos(server_name, token_type \\ :user_token) do
-    with token when is_binary(token) <-
-           Application.get_env(:slackdb, :servers) |> get_in([server_name, token_type]) do
+  @doc """
+  ## Options
+  * `:token_type` - `:bot_token` or `user_token`, default is `user_token`
+  """
+  @spec get_all_convos(String.t(), :bot_token | :user_token) ::
+          {:error, String.t()} | {:ok, list(map())}
+  def get_all_convos(server_name, opts \\ []) do
+    token_type = Keyword.get(opts, :token_type, :user_token)
+
+    with [token] <- Utils.get_tokens(server_name, [token_type]) do
       paginate_convos(token, nil, [])
     else
-      _err -> {:error, "improper_config"}
+      e -> e
     end
   end
 
