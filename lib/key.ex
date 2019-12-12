@@ -5,6 +5,7 @@ defmodule SlackDB.Key do
   use Private
   alias SlackDB.Client
   alias SlackDB.Messages
+  alias SlackDB.Utils
 
   @typedoc """
   Types of SlackDB keys represented as atoms
@@ -43,18 +44,12 @@ defmodule SlackDB.Key do
 
   @doc false
   @spec get_value(SlackDB.Key.t()) :: {:error, String.t()} | {:ok, SlackDB.value()}
-  def get_value(
-        %SlackDB.Key{server_name: server_name, metadata: [:single_front | _more_metadata]} = key
-      ) do
-    with %{user_token: user_token} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         [first_reply | _other_replies] <- Messages.get_all_replies(user_token, key) do
+  def get_value(%SlackDB.Key{metadata: [:single_front | _more_metadata]} = key) do
+    with {:ok, [first_reply | _other_replies]} <- Messages.get_all_replies(key) do
       {:ok, first_reply["text"]}
       # _ -> {:error, "error_pulling_thread"}
     else
       [] -> {:error, "no_replies"}
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
       err -> err
     end
   end
@@ -62,8 +57,7 @@ defmodule SlackDB.Key do
   def get_value(
         %SlackDB.Key{server_name: server_name, metadata: [:single_back | _more_metadata]} = key
       ) do
-    with %{user_token: user_token} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
+    with [user_token] <- Utils.get_tokens(server_name, [:user_token]),
          {:ok, %{"messages" => [_key_message | replies]}} <-
            Client.conversations_replies(user_token, key, nil, 1) do
       case replies do
@@ -72,43 +66,25 @@ defmodule SlackDB.Key do
         _ -> {:error, "unexpected_reply_format"}
       end
     else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
       err -> err
     end
   end
 
-  def get_value(
-        %SlackDB.Key{server_name: server_name, metadata: [:multiple | _more_metadata]} = key
-      ) do
-    with %{user_token: user_token} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         replies when is_list(replies) <- Messages.get_all_replies(user_token, key) do
+  def get_value(%SlackDB.Key{metadata: [:multiple | _more_metadata]} = key) do
+    with {:ok, replies} <- Messages.get_all_replies(key) do
       {:ok, replies |> Enum.map(fn msg -> msg["text"] end)}
     else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
       err -> err
     end
   end
 
-  def get_value(
-        %SlackDB.Key{
-          server_name: server_name,
-          # channel_id: channel_id,
-          metadata: [:voting | _more_metadata]
-        } = key
-      ) do
-    with %{user_token: user_token} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         replies when is_list(replies) <- Messages.get_all_replies(user_token, key) do
+  def get_value(%SlackDB.Key{metadata: [:voting | _more_metadata]} = key) do
+    with {:ok, replies} <- Messages.get_all_replies(key) do
       {:ok,
        replies
        |> Enum.max_by(&tally_reactions/1)
        |> Map.get("text")}
     else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
       err -> err
     end
   end
