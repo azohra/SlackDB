@@ -4,26 +4,32 @@ defmodule SlackDB.Messages do
   alias SlackDB.Client
   alias SlackDB.Utils
 
-  @callback get_all_replies(SlackDB.Key.t(), :bot_token | :user_token) ::
+  @callback get_all_replies(SlackDB.Key.t(), keyword()) ::
               {:ok, list(map())} | {:error, String.t()}
-  @callback wipe_thread(String.t(), SlackDB.Key.t(), boolean()) ::
-              list(tuple()) | {:error, String.t()}
+  @callback wipe_thread(SlackDB.Key.t(), keyword()) ::
+              {:ok, list(tuple())} | {:error, binary}
   @callback post_thread(String.t(), String.t(), String.t(), list(String.t()) | String.t()) ::
               list(tuple()) | {:error, String.t()}
+  @callback post_thread(String.t(), String.t(), String.t(), list(String.t()) | String.t()) ::
+              {:ok, list(tuple())}
 
+  @spec post_thread(SlackDB.Key.t(), list(String.t()) | String.t()) ::
+          {:ok, list(tuple())} | {:error, String.t()}
   def post_thread(key, values) do
     with [bot_token] <- Utils.get_tokens(key.server_name, [:bot_token]) do
-      post_thread(bot_token, key.channel_id, key.ts, values)
+      {:ok, post_thread(bot_token, key.channel_id, key.ts, values)}
     else
       err -> err
     end
   end
 
+  @spec post_thread(String.t(), String.t(), String.t(), list(String.t()) | String.t()) ::
+          {:ok, list(tuple())}
   def post_thread(bot_token, channel_id, thread_ts, values) when is_binary(values),
     do: post_thread(bot_token, channel_id, thread_ts, [values])
 
   def post_thread(bot_token, channel_id, thread_ts, values) when is_list(values) do
-    post_thread_recurse(bot_token, channel_id, thread_ts, values)
+    {:ok, post_thread_recurse(bot_token, channel_id, thread_ts, values)}
   end
 
   defp post_thread_recurse(_bot_token, _channel_id, _thread_ts, []), do: []
@@ -36,14 +42,14 @@ defmodule SlackDB.Messages do
   end
 
   @doc """
-  Note: just because you get an ok doesn't mean every request was successful
+  Note: just because you get a function-wide :ok doesn't mean every request was successful
 
   ## Options
   * `:include_key?` - boolean, default is true
   * `:token_type` - `:bot_token` or `user_token`, default is `user_token`
   """
   @spec wipe_thread(SlackDB.Key.t(), keyword()) ::
-          {:ok, list(map())} | {:error, binary}
+          {:ok, list(tuple())} | {:error, binary}
   def wipe_thread(key, opts \\ []) do
     token_type = Keyword.get(opts, :token_type, :user_token)
 

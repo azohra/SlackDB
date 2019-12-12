@@ -4,8 +4,8 @@ defmodule SlackDB.Channels do
   alias SlackDB.Client
   alias SlackDB.Utils
 
-  @callback get_all_convos(String.t(), :bot_token | :user_token) ::
-              {:error, any()} | {:ok, list(map())}
+  @callback get_all_convos(String.t(), keyword()) ::
+              {:error, String.t()} | {:ok, list(map())}
 
   defp client(), do: Application.get_env(:slackdb, :client_adapter, Client)
 
@@ -13,7 +13,7 @@ defmodule SlackDB.Channels do
   ## Options
   * `:token_type` - `:bot_token` or `user_token`, default is `user_token`
   """
-  @spec get_all_convos(String.t(), :bot_token | :user_token) ::
+  @spec get_all_convos(String.t(), keyword()) ::
           {:error, String.t()} | {:ok, list(map())}
   def get_all_convos(server_name, opts \\ []) do
     token_type = Keyword.get(opts, :token_type, :user_token)
