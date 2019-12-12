@@ -15,8 +15,7 @@ defmodule SlackDB.Search do
   def search(server_name, channel_name, key_phrase, only_bot? \\ true)
 
   def search(server_name, channel_name, key_phrase, true) do
-    with %{bot_name: bot_name} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name) do
+    with [bot_name] <- Utils.get_tokens(server_name, [:bot_name]) do
       search_query(
         server_name,
         channel_name,
@@ -24,8 +23,7 @@ defmodule SlackDB.Search do
         key_phrase
       )
     else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
+      err -> err
     end
   end
 
@@ -39,8 +37,7 @@ defmodule SlackDB.Search do
   end
 
   def search_query(server_name, channel_name, query, key_phrase) do
-    with %{user_token: user_token} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
+    with [user_token] <- Utils.get_tokens(server_name, [:user_token]),
          {:ok, key} <-
            pagination_search(
              user_token,
@@ -50,8 +47,6 @@ defmodule SlackDB.Search do
            ) do
       {:ok, key |> Map.put(:server_name, server_name)}
     else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
       err -> err
     end
   end
