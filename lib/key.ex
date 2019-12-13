@@ -2,7 +2,6 @@ defmodule SlackDB.Key do
   @moduledoc """
   A struct that holds all required information for a SlackDB key
   """
-  use Private
   alias SlackDB.Client
   alias SlackDB.Messages
   alias SlackDB.Utils
@@ -28,6 +27,12 @@ defmodule SlackDB.Key do
   @type more_metadata :: :constant | :undeletable
 
   @typedoc """
+  Represents the types of values that keys can hold. Since all values are stored in Slack,
+  they are all returned as strings (or a list of strings in the case of key_type `:multiple`)
+  """
+  @type value :: String.t() | list(String.t())
+
+  @typedoc """
   A map containing the necessary attributes to identify keys uniquely
   """
   @type t :: %SlackDB.Key{
@@ -42,14 +47,16 @@ defmodule SlackDB.Key do
   @enforce_keys [:channel_id, :ts, :metadata, :key_phrase]
   defstruct [:channel_id, :ts, :metadata, :key_phrase, :server_name, :channel_name]
 
+  defp client(), do: Application.get_env(:slackdb, :client_adapter, Client)
+  defp messages(), do: Application.get_env(:slackdb, :messages_adapter, Messages)
+
   @doc false
   @spec get_value(SlackDB.Key.t()) :: {:error, String.t()} | {:ok, SlackDB.value()}
   def get_value(%SlackDB.Key{metadata: [:single_front | _more_metadata]} = key) do
-    with {:ok, [first_reply | _other_replies]} <- Messages.get_all_replies(key) do
+    with {:ok, [first_reply | _other_replies]} <- messages().get_all_replies(key) do
       {:ok, first_reply["text"]}
-      # _ -> {:error, "error_pulling_thread"}
     else
-      [] -> {:error, "no_replies"}
+      {:ok, []} -> {:error, "no_replies"}
       err -> err
     end
   end
@@ -59,10 +66,10 @@ defmodule SlackDB.Key do
       ) do
     with [user_token] <- Utils.get_tokens(server_name, [:user_token]),
          {:ok, %{"messages" => [_key_message | replies]}} <-
-           Client.conversations_replies(user_token, key, nil, 1) do
-      case replies do
-        [] -> {:error, "no_replies"}
-        [%{"text" => text}] -> {:ok, text}
+           client().conversations_replies(user_token, key, []) do
+      case List.last(replies) do
+        nil -> {:error, "no_replies"}
+        %{"text" => text} -> {:ok, text}
         _ -> {:error, "unexpected_reply_format"}
       end
     else
@@ -71,7 +78,7 @@ defmodule SlackDB.Key do
   end
 
   def get_value(%SlackDB.Key{metadata: [:multiple | _more_metadata]} = key) do
-    with {:ok, replies} <- Messages.get_all_replies(key) do
+    with {:ok, replies} <- messages().get_all_replies(key) do
       {:ok, replies |> Enum.map(fn msg -> msg["text"] end)}
     else
       err -> err
@@ -79,7 +86,7 @@ defmodule SlackDB.Key do
   end
 
   def get_value(%SlackDB.Key{metadata: [:voting | _more_metadata]} = key) do
-    with {:ok, replies} <- Messages.get_all_replies(key) do
+    with {:ok, replies} <- messages().get_all_replies(key) do
       {:ok,
        replies
        |> Enum.max_by(&tally_reactions/1)
@@ -89,15 +96,13 @@ defmodule SlackDB.Key do
     end
   end
 
-  private do
-    defp tally_reactions(message_details) do
-      case message_details["reactions"] do
-        nil ->
-          0
+  defp tally_reactions(message_details) do
+    case message_details["reactions"] do
+      nil ->
+        0
 
-        reactions_list when is_list(reactions_list) ->
-          Enum.reduce(reactions_list, 0, fn react, acc -> react["count"] + acc end)
-      end
+      reactions_list when is_list(reactions_list) ->
+        Enum.reduce(reactions_list, 0, fn react, acc -> react["count"] + acc end)
     end
   end
 end
