@@ -33,8 +33,8 @@ defmodule SlackDB.ChannelsTest do
   setup do
     Client.Mock
     |> expect(:conversations_list, 6, fn
-      _, nil -> {:ok, @pagination_result_1}
-      _, "cursor1" -> {:ok, @pagination_result_2}
+      _, cursor: nil -> {:ok, @pagination_result_1}
+      _, cursor: "cursor1" -> {:ok, @pagination_result_2}
     end)
 
     :ok
@@ -49,6 +49,7 @@ defmodule SlackDB.ChannelsTest do
                 %{"id" => "CQ5H0JBDZ", "name" => "new"}
               ]}
 
-    assert get_all_convos("doesnt exist") === {:error, "improper_config"}
+    assert get_all_convos("doesnt exist") ===
+             {:error, "KeyError: couldn't find key `doesnt exist`"}
   end
 end
