@@ -4,8 +4,6 @@ defmodule SlackDB.SearchTest do
   import Mox
   import SlackDB.Search
 
-  @s_url "https://slack.com/api"
-
   @pagination_result_1 %{
     "matches" => [
       %{
@@ -67,8 +65,11 @@ defmodule SlackDB.SearchTest do
   end
 
   test "search error catching" do
-    assert search("not_found", "channel", "key") == {:error, "server_not_found_in_config"}
-    assert search("improperly_configed", "channel", "key") == {:error, "improper_config"}
+    assert search("not_found", "channel", "key") ==
+             {:error, "KeyError: couldn't find key `not_found`"}
+
+    assert search("improperly_configed", "channel", "key") ==
+             {:error, "KeyError: couldn't find key `bot_name`"}
   end
 
   test "search pagination" do
