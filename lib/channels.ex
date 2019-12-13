@@ -28,7 +28,7 @@ defmodule SlackDB.Channels do
   # paginate through conversations.list responeses and collect public+private channels in a list
   # each element of the list is a map containing data about the channel shown at this doc https://api.slack.com/methods/conversations.list
   defp paginate_convos(token, cursor, list) do
-    with {:ok, resp} <- client().conversations_list(token, cursor) |> IO.inspect() do
+    with {:ok, resp} <- client().conversations_list(token, cursor: cursor) do
       case get_in(resp, ["response_metadata", "next_cursor"]) do
         nil -> {:error, "response_parse_error"}
         "" -> {:ok, list ++ resp["channels"]}
