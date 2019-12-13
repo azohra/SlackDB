@@ -42,7 +42,7 @@ defmodule SlackDB.Utils do
 
       for key <- key_list, do: Map.fetch!(server, key)
     rescue
-      e in KeyError -> {:error, "KeyError: couldn't find key #{e.key}"}
+      e in KeyError -> {:error, "KeyError: couldn't find key `#{e.key}`"}
     end
   end
 
