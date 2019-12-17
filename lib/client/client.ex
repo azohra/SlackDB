@@ -7,6 +7,8 @@ defmodule SlackDB.Client do
 
   @callback search_messages(String.t(), String.t(), keyword()) ::
               {:error, any()} | {:ok, map()}
+  @callback chat_postMessage(String.t(), String.t(), String.t()) ::
+              {:error, any()} | {:ok, map()}
   @callback chat_postMessage(String.t(), String.t(), String.t(), keyword()) ::
               {:error, any()} | {:ok, map()}
   @callback chat_delete(String.t(), String.t(), String.t()) ::
@@ -40,7 +42,7 @@ defmodule SlackDB.Client do
              page: Keyword.get(opts, :page, 1)
              # count: 1
            }) do
-      case resp.body |> Jason.decode!() |> IO.inspect() do
+      case resp.body |> Jason.decode!() do
         %{"ok" => true, "messages" => messages} -> {:ok, messages}
         %{"ok" => false, "error" => error} -> {:error, error}
         _ -> {:error, resp.status}
@@ -66,7 +68,7 @@ defmodule SlackDB.Client do
                thread_ts: Keyword.get(opts, :thread_ts, nil)
              }
            ) do
-      case resp.body |> Jason.decode!() |> IO.inspect() do
+      case resp.body |> Jason.decode!() do
         %{"ok" => true} = body -> {:ok, body}
         %{"ok" => false, "error" => error} -> {:error, error}
         _ -> {:error, resp.status}
@@ -85,7 +87,7 @@ defmodule SlackDB.Client do
                ts: ts
              }
            ) do
-      case resp.body |> Jason.decode!() |> IO.inspect() do
+      case resp.body |> Jason.decode!() do
         %{"ok" => true} = body -> {:ok, body}
         %{"ok" => false, "error" => error} -> {:error, error}
         _ -> {:error, resp.status}
