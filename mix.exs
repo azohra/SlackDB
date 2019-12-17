@@ -31,23 +31,15 @@ defmodule SlackDB.MixProject do
   end
 
   defp copy_images(_) do
-    File.cp_r("design", "doc/design", fn source, destination ->
-      IO.gets("Overwriting #{destination} by #{source}. Type y to confirm. ") == "y\n"
-    end)
-
-    # File.cp_r("doc", "docs", fn _source, _destination ->
-    #   true
-    # end)
+    File.cp_r("design", "doc/design")
   end
 
   defp deps do
     [
       {:tesla, "~> 1.2.1"},
       {:jason, ">= 1.0.0"},
-      {:private, "~> 0.1.1"},
       {:flow, "~> 0.14"},
       {:ex_doc, ">= 0.0.0", only: :dev},
-      {:httpoison, "~> 0.13.0"},
       {:mox, "~> 0.5", only: :test}
     ]
   end
