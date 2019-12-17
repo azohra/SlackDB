@@ -4,16 +4,56 @@ defmodule SlackDB.Messages do
   alias SlackDB.Client
   alias SlackDB.Utils
 
+  @callback get_all_replies(SlackDB.Key.t()) ::
+              {:ok, list(map())} | {:error, String.t()}
   @callback get_all_replies(SlackDB.Key.t(), keyword()) ::
               {:ok, list(map())} | {:error, String.t()}
   @callback wipe_thread(SlackDB.Key.t(), keyword()) ::
-              {:ok, list(tuple())} | {:error, binary}
+              {:ok, list(tuple())} | {:error, String.t()}
   @callback post_thread(SlackDB.Key.t(), SlackDB.Key.value()) ::
               {:ok, list(tuple())} | {:error, String.t()}
   @callback post_thread(String.t(), String.t(), String.t(), SlackDB.Key.value()) ::
               {:ok, list(tuple())}
+  @callback post_key_val(
+              String.t(),
+              String.t(),
+              String.t(),
+              SlackDB.Key.value(),
+              list(atom()) | atom()
+            ) ::
+              {:ok, list(tuple())} | {:error, String.t()}
 
   defp client(), do: Application.get_env(:slackdb, :client_adapter, Client)
+
+  @spec post_key_val(
+          String.t(),
+          String.t(),
+          String.t(),
+          SlackDB.Key.value(),
+          list(atom()) | atom()
+        ) ::
+          {:ok, list(tuple())} | {:error, String.t()}
+
+  def post_key_val(server_name, channel_id, key_phrase, values, all_metadata)
+      when is_atom(all_metadata),
+      do: post_key_val(server_name, channel_id, key_phrase, values, [all_metadata])
+
+  def post_key_val(server_name, channel_id, key_phrase, values, all_metadata) do
+    metadata_as_emojis =
+      all_metadata |> Enum.map(fn x -> Utils.metadata_to_emoji(x) end) |> Enum.join()
+
+    with [bot_token] <- Utils.get_tokens(server_name, [:bot_token]),
+         {:ok, %{"ts" => thread_ts}} <-
+           client().chat_postMessage(
+             bot_token,
+             key_phrase <> " #{metadata_as_emojis}",
+             channel_id
+           ) do
+      post_thread(bot_token, channel_id, thread_ts, values)
+    else
+      err -> err
+    end
+  end
 
   @spec post_thread(SlackDB.Key.t(), SlackDB.Key.value()) ::
           {:ok, list(tuple())} | {:error, String.t()}
@@ -51,7 +91,7 @@ defmodule SlackDB.Messages do
   * `:token_type` - `:bot_token` or `user_token`, default is `user_token`
   """
   @spec wipe_thread(SlackDB.Key.t(), keyword()) ::
-          {:ok, list(tuple())} | {:error, binary}
+          {:ok, list(tuple())} | {:error, String.t()}
   def wipe_thread(key, opts \\ []) do
     token_type = Keyword.get(opts, :token_type, :user_token)
 

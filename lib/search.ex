@@ -1,8 +1,6 @@
 defmodule SlackDB.Search do
   @moduledoc false
 
-  use Private
-
   alias SlackDB.Client
   alias SlackDB.Utils
 
