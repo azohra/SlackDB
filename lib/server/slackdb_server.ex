@@ -2,12 +2,23 @@ defmodule SlackDB.Server do
   @moduledoc false
 
   use GenServer
-  use Private
 
   alias SlackDB.Utils
   alias SlackDB.Client
   alias SlackDB.Utils
   alias SlackDB.Messages
+
+  @required_keys [
+    :bot_token,
+    :user_token,
+    :bot_name,
+    :supervisor_channel_name,
+    :supervisor_channel_id
+  ]
+
+  defp client(), do: Application.get_env(:slackdb, :client_adapter, Client)
+  defp slackdb(), do: Application.get_env(:slackdb, :slackdb_adapter, SlackDB)
+  defp messages(), do: Application.get_env(:slackdb, :messages_adapter, Messages)
 
   @doc """
   Start genserver, pull server config from application environment and pass to init/1
@@ -24,27 +35,32 @@ defmodule SlackDB.Server do
 
   @impl true
   def init(config) do
-    servers = Map.keys(config)
+    case verify_config(config) do
+      {:error, msg} ->
+        {:stop, msg}
 
-    server_states =
-      servers
-      |> Enum.map(fn server_name ->
-        {server_name,
-         SlackDB.read(
-           server_name,
-           get_in(config, [server_name, :supervisor_channel_name]),
-           server_name
-         )}
-      end)
-      |> Enum.map(&initialize_supervisor_channel/1)
+      :ok ->
+        server_states =
+          config
+          |> Map.keys()
+          |> Enum.map(fn server_name ->
+            {server_name,
+             slackdb().read(
+               server_name,
+               get_in(config, [server_name, :supervisor_channel_name]),
+               server_name,
+               true
+             )}
+          end)
+          |> Enum.map(&initialize_supervisor_channel/1)
 
-    config =
-      config
-      |> populate_channels(server_states)
+        config =
+          config
+          |> populate_channels(server_states)
+          |> IO.inspect()
 
-    # |> IO.inspect()
-
-    {:ok, config}
+        {:ok, config}
+    end
   end
 
   @impl true
@@ -52,33 +68,13 @@ defmodule SlackDB.Server do
         {:create, server_name, channel_name, key_phrase, values, all_metadata},
         _from,
         state
-      )
-      when is_list(values) do
+      ) do
     resp =
-      with %{bot_token: bot_token, channels: channels} <- state[server_name] do
-        case channels[channel_name] do
-          nil ->
-            {:error, "channel_name_not_in_database"}
-
-          channel_id ->
-            metadata_as_emojis =
-              all_metadata |> Enum.map(fn x -> Utils.metadata_to_emoji(x) end) |> Enum.join()
-
-            with {:ok, %{"ts" => thread_ts}} <-
-                   Client.chat_postMessage(
-                     bot_token,
-                     key_phrase <> " #{metadata_as_emojis}",
-                     channel_id
-                   ) do
-              Messages.post_thread(bot_token, channel_id, thread_ts, values)
-            else
-              err -> err
-            end
-        end
+      with channel_id when is_binary(channel_id) <-
+             get_in(state, [server_name, :channels, channel_name]) do
+        messages().post_key_val(server_name, channel_id, key_phrase, values, all_metadata)
       else
-        nil -> {:error, "server_not_found_in_config"}
-        %{} -> {:error, "improper_config"}
-        err -> err
+        nil -> {:error, "channel_name_not_in_database"}
       end
 
     {:reply, resp, state}
@@ -93,12 +89,11 @@ defmodule SlackDB.Server do
             {:error, "channel_name_not_in_database"}
 
           channel_id ->
-            Client.conversations_invite(user_token, channel_id, Enum.join(user_ids, ","))
+            client().conversations_invite(user_token, channel_id, Enum.join(user_ids, ","))
         end
       else
         nil -> {:error, "server_not_found_in_config"}
         %{} -> {:error, "improper_config"}
-        err -> err
       end
 
     {:reply, resp, state}
@@ -117,12 +112,11 @@ defmodule SlackDB.Server do
             {:error, "channel_name_not_in_database"}
 
           channel_id ->
-            Client.conversations_archive(user_token, channel_id)
+            client().conversations_archive(user_token, channel_id)
         end
       else
         nil -> {:error, "server_not_found_in_config"}
         %{} -> {:error, "improper_config"}
-        err -> err
       end
 
     new_state =
@@ -144,42 +138,56 @@ defmodule SlackDB.Server do
   ## INIT HELPERS ####################################################################
   ####################################################################################
 
-  private do
-    defp populate_channels(map, [{server_name, state}]) do
-      put_in(map, [server_name, :channels], state)
-    end
+  defp populate_channels(map, [{server_name, state}]) do
+    put_in(map, [server_name, :channels], state)
+  end
 
-    defp populate_channels(map, [{server_name, state} | more_server_states]) do
-      populate_channels(map, more_server_states)
-      |> put_in([server_name, :channels], state)
-    end
+  defp populate_channels(map, [{server_name, state} | more_server_states]) do
+    populate_channels(map, more_server_states)
+    |> put_in([server_name, :channels], state)
+  end
 
-    defp initialize_supervisor_channel({server_name, {:ok, server_state}}) do
-      case server_state |> Jason.decode() do
-        {:ok, map} -> {server_name, map}
-        other -> {server_name, other}
+  defp initialize_supervisor_channel({server_name, {:ok, server_state}}) do
+    case server_state |> Jason.decode() do
+      {:ok, map} -> {server_name, map}
+      other -> {server_name, other}
+    end
+  end
+
+  defp initialize_supervisor_channel({server_name, {:error, _error_message}}) do
+    key_phrase = server_name
+    metadata = :single_back
+
+    init =
+      with [sprvsr_chnl_id] <- Utils.get_tokens(server_name, [:supervisor_channel_id]),
+           {:ok, _thread} <-
+             messages().post_key_val(server_name, sprvsr_chnl_id, key_phrase, "%{}", [metadata]) do
+        %{}
+      else
+        err -> err
       end
-    end
 
-    defp initialize_supervisor_channel({server_name, {:error, _error_message}}) do
-      init =
-        with [bot_token, sprvsr_chnl_id] <-
-               Utils.get_tokens(server_name, [:bot_token, :supervisor_channel_id]),
-             {:ok, %{"ts" => thread_ts}} <-
-               Client.chat_postMessage(
-                 bot_token,
-                 server_name <> " #{Utils.metadata_to_emoji(:single_back)}",
-                 sprvsr_chnl_id
-               ),
-             _resp_list <- Messages.post_thread(bot_token, sprvsr_chnl_id, thread_ts, "{}") do
-          %{}
-        else
-          nil -> {:error, "server_not_found_in_config"}
-          %{} -> {:error, "improper_config"}
-          err -> err
-        end
+    {server_name, init}
+  end
 
-      {server_name, init}
+  defp verify_config(config) do
+    Enum.filter(config, fn
+      {_server_name, server_config} when is_map(server_config) ->
+        @required_keys
+        |> Enum.all?(&Map.has_key?(server_config, &1))
+        |> Kernel.not()
+
+      _ ->
+        true
+    end)
+    |> case do
+      [] ->
+        :ok
+
+      list ->
+        list_string = list |> Enum.map(&elem(&1, 0)) |> Enum.join(", ")
+
+        {:error, "The following servers are improperly configured: " <> list_string}
     end
   end
 end
