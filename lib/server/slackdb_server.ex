@@ -7,6 +7,7 @@ defmodule SlackDB.Server do
   alias SlackDB.Client
   alias SlackDB.Utils
   alias SlackDB.Messages
+  alias SlackDB.Channels
 
   @required_keys [
     :bot_token,
@@ -19,6 +20,7 @@ defmodule SlackDB.Server do
   defp client(), do: Application.get_env(:slackdb, :client_adapter, Client)
   defp slackdb(), do: Application.get_env(:slackdb, :slackdb_adapter, SlackDB)
   defp messages(), do: Application.get_env(:slackdb, :messages_adapter, Messages)
+  defp channels(), do: Application.get_env(:slackdb, :channels_adapter, Channels)
 
   @doc """
   Start genserver, pull server config from application environment and pass to init/1
@@ -83,17 +85,11 @@ defmodule SlackDB.Server do
   def handle_call({:invite, server_name, channel_name, user_ids}, _from, state)
       when is_list(user_ids) do
     resp =
-      with %{user_token: user_token, channels: channels} <- state[server_name] do
-        case channels[channel_name] do
-          nil ->
-            {:error, "channel_name_not_in_database"}
-
-          channel_id ->
-            client().conversations_invite(user_token, channel_id, Enum.join(user_ids, ","))
-        end
+      with channel_id when is_binary(channel_id) <-
+             get_in(state, [server_name, :channels, channel_name]) do
+        channels().invite_to_channel(server_name, channel_id, user_ids)
       else
-        nil -> {:error, "server_not_found_in_config"}
-        %{} -> {:error, "improper_config"}
+        nil -> {:error, "channel_name_not_in_database"}
       end
 
     {:reply, resp, state}
