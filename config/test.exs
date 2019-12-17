@@ -2,6 +2,10 @@ use Mix.Config
 
 config :tesla, adapter: Tesla.Mock
 
+config :slackdb, :client_adapter, Client.Mock
+config :slackdb, :messages_adapter, Messages.Mock
+config :slackdb, :slackdb_adapter, SlackDB.Mock
+
 config :slackdb,
   servers: %{
     "server" => %{
