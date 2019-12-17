@@ -49,6 +49,9 @@ defmodule SlackDB.MessagesTest do
     |> expect(:chat_postMessage, 2, fn
       _, _, _, _ -> {:ok, @post_message_result}
     end)
+    |> expect(:chat_postMessage, 2, fn
+      _, _, _ -> {:ok, @post_message_result}
+    end)
     |> expect(:chat_delete, 9, fn
       _, _, _ -> {:ok, @delete_message_result}
     end)
@@ -84,7 +87,7 @@ defmodule SlackDB.MessagesTest do
              {:error, "KeyError: couldn't find key `not_found`"}
   end
 
-  test "conversations_replies" do
+  test "get_all_replies" do
     key = %{server_name: "server"}
 
     assert get_all_replies(key) ===
@@ -100,5 +103,10 @@ defmodule SlackDB.MessagesTest do
            |> Map.put(:server_name, "not_found")
            |> get_all_replies() ===
              {:error, "KeyError: couldn't find key `not_found`"}
+  end
+
+  test "post_key_val" do
+    assert post_key_val("server", "channel_id", "phrase", "val", :single_back) ==
+             {:ok, [ok: @post_message_result]}
   end
 end

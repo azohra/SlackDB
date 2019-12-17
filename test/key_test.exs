@@ -1,4 +1,4 @@
-defmodule SlackDB.ChannelsTest do
+defmodule SlackDB.KeyTest do
   use ExUnit.Case
 
   import Mox

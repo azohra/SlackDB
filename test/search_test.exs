@@ -67,9 +67,6 @@ defmodule SlackDB.SearchTest do
   test "search error catching" do
     assert search("not_found", "channel", "key") ==
              {:error, "KeyError: couldn't find key `not_found`"}
-
-    assert search("improperly_configed", "channel", "key") ==
-             {:error, "KeyError: couldn't find key `bot_name`"}
   end
 
   test "search pagination" do
