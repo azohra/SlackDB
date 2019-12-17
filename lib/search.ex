@@ -4,6 +4,9 @@ defmodule SlackDB.Search do
   alias SlackDB.Client
   alias SlackDB.Utils
 
+  @callback search(String.t(), String.t(), String.t(), boolean()) ::
+              {:ok, SlackDB.Key.t()} | {:error, String.t()}
+
   @emoji_list_regex ~r/:[^:]+:/
 
   defp client(), do: Application.get_env(:slackdb, :client_adapter, Client)

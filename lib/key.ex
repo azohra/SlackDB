@@ -6,6 +6,8 @@ defmodule SlackDB.Key do
   alias SlackDB.Messages
   alias SlackDB.Utils
 
+  @callback get_value(SlackDB.Key.t()) :: {:error, String.t()} | {:ok, SlackDB.value()}
+
   @typedoc """
   Types of SlackDB keys represented as atoms
 
