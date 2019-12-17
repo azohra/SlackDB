@@ -6,8 +6,32 @@ defmodule SlackDB.Channels do
 
   @callback get_all_convos(String.t(), keyword()) ::
               {:error, String.t()} | {:ok, list(map())}
+  @callback invite_to_channel(String.t(), String.t() | :supervisor, list(String.t())) ::
+              {:error, String.t()} | {:ok, map()}
 
   defp client(), do: Application.get_env(:slackdb, :client_adapter, Client)
+
+  @spec invite_to_channel(String.t(), String.t() | :supervisor, list(String.t())) ::
+          {:error, String.t()} | {:ok, map()}
+  def invite_to_channel(server_name, :supervisor, user_ids) when is_list(user_ids) do
+    with [supervisor_channel_id] <- Utils.get_tokens(server_name, [:supervisor_channel_id]) do
+      invite_to_channel(server_name, supervisor_channel_id, user_ids)
+    else
+      err -> err
+    end
+  end
+
+  def invite_to_channel(server_name, channel_id, user_ids) when is_list(user_ids) do
+    with [user_token] <- Utils.get_tokens(server_name, [:user_token]) do
+      client().conversations_invite(
+        user_token,
+        channel_id,
+        Enum.join(user_ids, ",")
+      )
+    else
+      err -> err
+    end
+  end
 
   @doc """
   ## Options
