@@ -214,14 +214,6 @@ defmodule SlackDB.Client do
     Tesla.client(middleware)
   end
 
-  # defp parse_slack_response(resp, pull_key) do
-  #   case resp.body |> Jason.decode!() do
-  #     %{"ok" => true} = body -> {:ok, body}
-  #     %{"ok" => false, "error" => error} -> {:error, error}
-  #     _ -> {:error, resp.status}
-  #   end
-  # end
-
   # def get_message(token, channel, ts) do
   #   with {:ok, resp} <-
   #          client(token)

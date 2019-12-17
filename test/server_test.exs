@@ -31,7 +31,9 @@ defmodule SlackDB.ServerTest do
       _, "channel_works" -> {:ok, %{"ok" => true}}
       _, "channel_fails" -> {:error, "channel_failed"}
     end)
-    |> expect(:conversations_invite, 2, fn
+
+    Channels.Mock
+    |> expect(:invite_to_channel, 1, fn
       _, _, _ -> {:ok, @channel_info}
     end)
 
