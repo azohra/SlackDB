@@ -25,13 +25,6 @@ defmodule SlackDB.Utils do
     undeletable: ":anchor:"
     # locked: ":octagonal_sign:",
   }
-  ####################################################################################
-  ## HIGH LEVEL UTILITIES ############################################################
-  ####################################################################################
-
-  ####################################################################################
-  ## SLACKDB HELPERS #################################################################
-  ####################################################################################
 
   @spec get_tokens(term(), list(atom())) :: list() | {:error, String.t()}
   def get_tokens(server_name, key_list) do
@@ -56,17 +49,5 @@ defmodule SlackDB.Utils do
 
   def emoji_to_metadata(emoji) when is_binary(emoji) do
     Map.get(@emoji_to_metadata, emoji, :unknown_emoji)
-  end
-
-  ####################################################################################
-  ## GENERIC HELPERS #################################################################
-  ####################################################################################
-
-  # like Kernel.put_in but it can add a k/v pair to an existing nested map rather than only update the value
-  def put_kv_in(map, [], new_key, new_value),
-    do: Map.put(map, new_key, new_value)
-
-  def put_kv_in(map, [head | tail], new_key, new_value) do
-    Map.put(map, head, put_kv_in(map[head], tail, new_key, new_value))
   end
 end
