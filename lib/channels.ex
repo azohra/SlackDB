@@ -4,6 +4,8 @@ defmodule SlackDB.Channels do
   alias SlackDB.Client
   alias SlackDB.Utils
 
+  @callback get_all_convos(String.t()) ::
+              {:error, String.t()} | {:ok, list(map())}
   @callback get_all_convos(String.t(), keyword()) ::
               {:error, String.t()} | {:ok, list(map())}
   @callback invite_to_channel(String.t(), String.t() | :supervisor, list(String.t())) ::

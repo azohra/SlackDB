@@ -66,7 +66,7 @@ Before startup, you'll need to:
 This channel is responsible for storing the current state (meaning a map of channel names->ids that are currently 'registered') of the database on that particular server. On startup, SlackDB will look in this channel and load the current state. If it can't find the current state, it will start from scratch assuming no channels have yet to be registered with the DB
 
 Your app needs to have the following scopes to get full SlackDB functionality:
-`search:read`, `channels:write`, `groups:write`, `channels:read`, `groups:read`, `	reactions:read`, `channels:history`, `groups:history`
+`search:read`, `chat:write`, `chat:write:bot`, `chat:write:user`,`channels:write`, `groups:write`, `channels:read`, `groups:read`, `	reactions:read`, `channels:history`, `groups:history`, 
 
 Once you have your supervisor channels, fill out the config like so:
 

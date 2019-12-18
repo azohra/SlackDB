@@ -50,8 +50,7 @@ defmodule SlackDB.Server do
              slackdb().read(
                server_name,
                get_in(config, [server_name, :supervisor_channel_name]),
-               server_name,
-               true
+               server_name
              )}
           end)
           |> Enum.map(&initialize_supervisor_channel/1)
@@ -59,7 +58,6 @@ defmodule SlackDB.Server do
         config =
           config
           |> populate_channels(server_states)
-          |> IO.inspect()
 
         {:ok, config}
     end
@@ -134,9 +132,7 @@ defmodule SlackDB.Server do
   ## INIT HELPERS ####################################################################
   ####################################################################################
 
-  defp populate_channels(map, [{server_name, state}]) do
-    put_in(map, [server_name, :channels], state)
-  end
+  defp populate_channels(map, []), do: map
 
   defp populate_channels(map, [{server_name, state} | more_server_states]) do
     populate_channels(map, more_server_states)

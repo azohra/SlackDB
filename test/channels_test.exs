@@ -31,8 +31,8 @@ defmodule SlackDB.ChannelsTest do
   }
 
   @channel_info %{
-    id: "CFC6MRQ06",
-    name: "slackdb-admin"
+    "id" => "CFC6MRQ06",
+    "name" => "slackdb-admin"
   }
 
   setup do
@@ -64,7 +64,7 @@ defmodule SlackDB.ChannelsTest do
 
   test "invite_to_channel" do
     assert invite_to_channel("server", :supervisor, ["id1"]) ==
-             {:ok, %{id: "CFC6MRQ06", name: "slackdb-admin"}}
+             {:ok, @channel_info}
 
     assert invite_to_channel("server", "error_channel", ["id1"]) ==
              {:error, %{"ok" => false}}
