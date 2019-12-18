@@ -124,9 +124,7 @@ defmodule SlackDB do
   """
   @spec read!(String.t(), String.t(), String.t(), keyword()) :: SlackDB.Key.value()
   def read!(server_name, channel_name, key_phrase, opts \\ []) do
-    only_bot? = Keyword.get(opts, :only_bot?, true)
-
-    read(server_name, channel_name, key_phrase, only_bot?: only_bot?)
+    read(server_name, channel_name, key_phrase, opts)
     |> case do
       {:ok, val} -> val
       {:error, msg} -> raise msg
