@@ -44,7 +44,7 @@ Add the `:slackdb` dependency to your `mix.exs` file:
 ```elixir
 def deps do
   [
-    {:slackdb, "~> 0.2.0"}
+    {:slackdb, "~> 0.2.1"}
   ]
 end
 ```
