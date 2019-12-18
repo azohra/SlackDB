@@ -8,13 +8,19 @@ defmodule SlackDB do
   and persisted in the supervisor channel
   """
   require Logger
+  alias SlackDB.Channels
   alias SlackDB.Client
-  alias SlackDB.Utils
+  alias SlackDB.Key
   alias SlackDB.Messages
   alias SlackDB.Search
-  alias SlackDB.Key
-  alias SlackDB.Channels
   alias SlackDB.Server
+  alias SlackDB.Utils
+
+  @callback read(String.t(), String.t(), String.t()) ::
+              {:error, String.t()} | {:ok, SlackDB.Key.value()}
+
+  @callback read(String.t(), String.t(), String.t(), keyword()) ::
+              {:error, String.t()} | {:ok, SlackDB.Key.value()}
 
   # @typedoc """
   # Types of SlackDB keys represented as atoms
@@ -36,24 +42,15 @@ defmodule SlackDB do
   # """
   # @type more_metadata :: :constant | :undeletable
 
-  @typedoc """
-  Represents the types of values that keys can hold. Since all values are stored in Slack,
-  they are all returned as strings (or a list of strings in the case of key_type `:multiple`)
-  """
-  @type value :: String.t() | list(String.t())
+  defp client(), do: Application.get_env(:slackdb, :client_adapter, Client)
+  defp search(), do: Application.get_env(:slackdb, :search_adapter, Search)
+  defp messages(), do: Application.get_env(:slackdb, :messages_adapter, Messages)
+  defp channels(), do: Application.get_env(:slackdb, :channels_adapter, Channels)
+  defp key(), do: Application.get_env(:slackdb, :key_adapter, Key)
 
   ####################################################################################
   ## PUBLIC API ######################################################################
   ####################################################################################
-
-  # @doc """
-  # Start genserver, pull server config from application environment and pass to init/1
-  # """
-  # def start_link do
-  #   config = Application.get_env(:slackdb, :servers)
-
-  #   GenServer.start_link(Server, config, name: Server)
-  # end
 
   @doc """
   Create a key/value pair in the specified server and channel of the given type
@@ -88,7 +85,7 @@ defmodule SlackDB do
           String.t(),
           String.t(),
           String.t(),
-          value(),
+          SlackDB.Key.value(),
           SlackDB.Key.type(),
           list(SlackDB.Key.more_metadata())
         ) :: {:error, String.t()} | list(tuple())
@@ -118,16 +115,19 @@ defmodule SlackDB do
 
   This will always pull from the most recently posted message that matches the key schema.
 
-  Setting `only_bot?` to true will search only for keys posted under the bot name specified in the config.
+  ## Options
+  * `only_bot` - boolean, whether to only search for bot-made keys. Defaults to true.
 
   ## Example
 
       iex> SlackDB.read!("dog_shelter", "adopted", "Beagles")
       ["Buddy", "Rufus"]
   """
-  @spec read!(String.t(), String.t(), String.t(), boolean()) :: value()
-  def read!(server_name, channel_name, key_phrase, only_bot? \\ true) do
-    read(server_name, channel_name, key_phrase, only_bot?)
+  @spec read!(String.t(), String.t(), String.t(), keyword()) :: SlackDB.Key.value()
+  def read!(server_name, channel_name, key_phrase, opts \\ []) do
+    only_bot? = Keyword.get(opts, :only_bot?, true)
+
+    read(server_name, channel_name, key_phrase, only_bot?: only_bot?)
     |> case do
       {:ok, val} -> val
       {:error, msg} -> raise msg
@@ -139,19 +139,22 @@ defmodule SlackDB do
 
   This will always pull from the most recently posted message that matches the key schema.
 
-  Setting `only_bot?` to true will search only for keys posted under the bot name specified in the config.
+  ## Options
+  * `only_bot` - boolean, whether to only search for bot-made keys. Defaults to true.
 
   ## Example
 
       iex> SlackDB.read("dog_shelter", "adopted", "Beagles")
       {:ok, ["Buddy", "Rufus"]}
   """
-  @spec read(String.t(), String.t(), String.t(), boolean()) ::
-          {:error, String.t()} | {:ok, value()}
-  def read(server_name, channel_name, key_phrase, only_bot? \\ true) do
-    with {:ok, key} <- Search.search(server_name, channel_name, key_phrase, only_bot?) do
+  @spec read(String.t(), String.t(), String.t(), keyword()) ::
+          {:error, String.t()} | {:ok, SlackDB.Key.value()}
+  def read(server_name, channel_name, key_phrase, opts \\ []) do
+    only_bot? = Keyword.get(opts, :only_bot?, true)
+
+    with {:ok, key} <- search().search(server_name, channel_name, key_phrase, only_bot?) do
       # IO.inspect(key)
-      Key.get_value(key)
+      key().get_value(key)
     else
       err -> err
     end
@@ -176,26 +179,22 @@ defmodule SlackDB do
         },
       ]
   """
-  @spec update(String.t(), String.t(), String.t(), value()) ::
-          {:error, String.t()} | list(tuple())
+  @spec update(String.t(), String.t(), String.t(), SlackDB.Key.value()) ::
+          {:error, String.t()} | {:ok, list(tuple())}
   def update(server_name, channel_name, key_phrase, value) when is_binary(value),
     do: update(server_name, channel_name, key_phrase, [value])
 
   def update(server_name, channel_name, key_phrase, values) when is_list(values) do
-    with %{bot_token: bot_token, user_token: user_token} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, key} <- Search.search(server_name, channel_name, key_phrase, false) do
+    with {:ok, key} <- search().search(server_name, channel_name, key_phrase, false) do
       cond do
         :constant in key.metadata ->
           {:error, "cannot_update_constant_key"}
 
         true ->
-          Messages.wipe_thread(user_token, key, false)
-          Messages.post_thread(bot_token, key.channel_id, values, key.ts)
+          messages().wipe_thread(key, include_key?: false)
+          messages().post_thread(key, values)
       end
     else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
       err -> err
     end
   end
@@ -219,18 +218,14 @@ defmodule SlackDB do
         },
       ]
   """
-  @spec delete(String.t(), String.t(), String.t()) :: {:error, String.t()} | list(tuple())
+  @spec delete(String.t(), String.t(), String.t()) :: {:error, String.t()} | {:ok, list(tuple())}
   def delete(server_name, channel_name, key_phrase) do
-    with %{user_token: user_token} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, key} <- Search.search(server_name, channel_name, key_phrase, false) do
+    with {:ok, key} <- search().search(server_name, channel_name, key_phrase, false) do
       cond do
         :undeletable in key.metadata -> {:error, "cannot_delete_undeletable_key"}
-        true -> Messages.wipe_thread(user_token, key, true)
+        true -> messages().wipe_thread(key, include_key?: true)
       end
     else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
       err -> err
     end
   end
@@ -256,25 +251,22 @@ defmodule SlackDB do
         }
       ]
   """
-  @spec append(String.t(), String.t(), String.t(), value()) ::
-          {:error, String.t()} | list(tuple())
+  @spec append(String.t(), String.t(), String.t(), SlackDB.Key.value()) ::
+          {:ok, [tuple()]} | {:error, String.t()}
   def append(server_name, channel_name, key_phrase, value) when is_binary(value),
     do: append(server_name, channel_name, key_phrase, [value])
 
   def append(server_name, channel_name, key_phrase, values) when is_list(values) do
-    with %{bot_token: bot_token} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         {:ok, key} <- Search.search(server_name, channel_name, key_phrase, true) do
+    with {:ok, key} <-
+           search().search(server_name, channel_name, key_phrase, only_bot?: true) do
       cond do
         :constant in key.metadata ->
           {:error, "cannot_append_to_constant_key"}
 
         true ->
-          Messages.post_thread(bot_token, key.channel_id, values, key.ts)
+          messages().post_thread(key, values)
       end
     else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
       err -> err
     end
   end
@@ -285,30 +277,35 @@ defmodule SlackDB do
   A channel must exist in the current state of the databse to create keys or to invite users.
   Since bots cannot add themselves to channels, you must also add the bot manually once the channel is created.
 
+  ## Options
+  * `is_private` - boolean, whether or not the channel is private. Defaults to false.
+
   ## Example
 
       iex> SlackDB.new_channel("dog_shelter", "volunteers", false)
       {:ok, "channel added"}
   """
-  @spec new_channel(String.t(), String.t(), boolean()) :: {:error, String.t()} | {:ok, map()}
-  def new_channel(server_name, channel_name, is_private?) do
-    with %{user_token: user_token, supervisor_channel_name: supervisor_channel_name} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
+  @spec new_channel(String.t(), String.t(), keyword()) :: {:error, String.t()} | {:ok, map()}
+  def new_channel(server_name, channel_name, opts \\ []) do
+    with [user_token, sprvsr_chnl_name] <-
+           Utils.get_tokens(server_name, [:user_token, :supervisor_channel_name]),
          {:ok, %{"name" => channel_name, "id" => channel_id}} <-
-           Client.conversations_create(user_token, channel_name, is_private?),
+           client().conversations_create(user_token, channel_name,
+             is_private: Keyword.get(opts, :is_private, false)
+           ),
          {:ok, new_state} <-
            GenServer.call(Server, {:put_channel, server_name, channel_name, channel_id}),
-         [{:ok, _resp}] <-
+         {:ok, [ok: _resp]} <-
            append(
              server_name,
-             supervisor_channel_name,
+             sprvsr_chnl_name,
              server_name,
              new_state |> get_in([server_name, :channels]) |> Jason.encode!()
            ) do
+      IO.inspect(channel_id, label: "#{channel_name} ")
+
       {:ok, new_state}
     else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
       err -> err
     end
   end
@@ -326,31 +323,22 @@ defmodule SlackDB do
   """
   @spec include_channel(String.t(), String.t()) :: {:error, String.t()} | {:ok, map()}
   def include_channel(server_name, channel_name) do
-    with %{user_token: user_token, supervisor_channel_name: supervisor_channel_name} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
-         convo_list <- Channels.get_all_convos(user_token) do
-      case convo_list |> Enum.find(fn chnl -> chnl["name"] == channel_name end) do
-        nil ->
-          {:error, "channel_not_found"}
-
-        %{"id" => channel_id} ->
-          with {:ok, new_state} <-
-                 GenServer.call(Server, {:put_channel, server_name, channel_name, channel_id}),
-               [{:ok, _resp}] <-
-                 append(
-                   server_name,
-                   supervisor_channel_name,
-                   server_name,
-                   new_state |> get_in([server_name, :channels]) |> Jason.encode!()
-                 ) do
-            {:ok, new_state}
-          else
-            err -> err
-          end
-      end
+    with [sprvsr_chnl_name] <- Utils.get_tokens(server_name, [:supervisor_channel_name]),
+         {:ok, convo_list} <- channels().get_all_convos(server_name),
+         %{"id" => channel_id} <-
+           convo_list |> Enum.find(fn chnl -> chnl["name"] == channel_name end),
+         {:ok, new_state} <-
+           GenServer.call(Server, {:put_channel, server_name, channel_name, channel_id}),
+         {:ok, [{:ok, _resp}]} <-
+           append(
+             server_name,
+             sprvsr_chnl_name,
+             server_name,
+             new_state |> get_in([server_name, :channels]) |> Jason.encode!()
+           ) do
+      {:ok, new_state}
     else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
+      nil -> {:error, "channel_not_found"}
       err -> err
     end
   end
@@ -365,21 +353,18 @@ defmodule SlackDB do
   """
   @spec archive_channel(String.t(), String.t()) :: {:error, String.t()} | {:ok, map()}
   def archive_channel(server_name, channel_name) do
-    with %{supervisor_channel_name: supervisor_channel_name} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name),
+    with [sprvsr_chnl_name] <- Utils.get_tokens(server_name, [:supervisor_channel_name]),
          {:ok, _resp} <- GenServer.call(Server, {:archive, server_name, channel_name}),
          new_state <- GenServer.call(Server, {:dump}),
-         [{:ok, _resp}] <-
+         {:ok, [{:ok, _resp}]} <-
            append(
              server_name,
-             supervisor_channel_name,
+             sprvsr_chnl_name,
              server_name,
              new_state |> get_in([server_name, :channels]) |> Jason.encode!()
            ) do
       {:ok, new_state}
     else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
       err -> err
     end
   end
@@ -398,7 +383,7 @@ defmodule SlackDB do
     do: invite_to_channel(server_name, channel_name, [user_id])
 
   def invite_to_channel(server_name, channel_name, user_ids)
-      when is_list(user_ids) and length(user_ids) < 30 and length(user_ids) > 0 do
+      when is_list(user_ids) and length(user_ids) in 1..29 do
     GenServer.call(Server, {:invite, server_name, channel_name, user_ids})
   end
 
@@ -416,19 +401,8 @@ defmodule SlackDB do
     do: invite_supervisors(server_name, [user_id])
 
   def invite_supervisors(server_name, user_ids)
-      when is_list(user_ids) and length(user_ids) < 30 and length(user_ids) > 0 do
-    with %{user_token: user_token, supervisor_channel_id: supervisor_channel_id} <-
-           Application.get_env(:slackdb, :servers) |> Map.get(server_name) do
-      Client.conversations_invite(
-        user_token,
-        supervisor_channel_id,
-        Enum.join(user_ids, ",")
-      )
-    else
-      nil -> {:error, "server_not_found_in_config"}
-      %{} -> {:error, "improper_config"}
-      err -> err
-    end
+      when is_list(user_ids) and length(user_ids) in 1..29 do
+    channels().invite_to_channel(server_name, :supervisor, user_ids)
   end
 
   @doc """

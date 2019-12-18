@@ -5,6 +5,9 @@ config :tesla, adapter: Tesla.Mock
 config :slackdb, :client_adapter, Client.Mock
 config :slackdb, :messages_adapter, Messages.Mock
 config :slackdb, :slackdb_adapter, SlackDB.Mock
+config :slackdb, :search_adapter, Search.Mock
+config :slackdb, :channels_adapter, Channels.Mock
+config :slackdb, :key_adapter, Key.Mock
 
 config :slackdb,
   servers: %{

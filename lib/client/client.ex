@@ -97,7 +97,7 @@ defmodule SlackDB.Client do
 
   @doc """
   ## Options
-  * `:is_private?` - boolean
+  * `:is_private` - boolean
   """
   @spec conversations_create(String.t(), String.t(), keyword()) :: {:error, any()} | {:ok, map()}
   def conversations_create(user_token, name, opts \\ []) do
@@ -108,7 +108,7 @@ defmodule SlackDB.Client do
              %{
                name: name,
                validate: true,
-               is_private: Keyword.get(opts, :is_private?, false)
+               is_private: Keyword.get(opts, :is_private, false)
              }
            ) do
       case resp.body |> Jason.decode!() do

@@ -1,15 +1,13 @@
 defmodule SlackDB.ServerTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case
 
   import Mox
   import SlackDB.Server
 
   @channel_info %{
-    id: "C012AB3CD",
-    name: "general"
+    "id" => "C012AB3CD",
+    "name" => "general"
   }
-
-  setup :set_mox_global
 
   setup do
     SlackDB.Mock
@@ -57,29 +55,6 @@ defmodule SlackDB.ServerTest do
 
     assert init(improper_config) ==
              {:stop, "The following servers are improperly configured: empty, missing"}
-  end
-
-  test "start_link and dump" do
-    {:ok, _pid} = start_link()
-
-    assert SlackDB.dump() == %{
-             "server" => %{
-               bot_name: "Jeanie",
-               bot_token: "xoxb",
-               channels: %{"new" => "CQGTEPMUL", "new_private" => "GQHDCMB9N"},
-               supervisor_channel_id: "CFC6MRQ06",
-               supervisor_channel_name: "slackdb-admin",
-               user_token: "xoxp"
-             },
-             "un_initialized_server" => %{
-               bot_name: "Jeanie",
-               bot_token: "xoxb",
-               channels: %{},
-               supervisor_channel_id: "CFC6MRQ07",
-               supervisor_channel_name: "slackdb-new-admins",
-               user_token: "xoxp"
-             }
-           }
   end
 
   test "handle_call put_channel" do
