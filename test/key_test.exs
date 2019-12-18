@@ -45,7 +45,7 @@ defmodule SlackDB.KeyTest do
   end
 
   test "votable key" do
-    assert SlackDB.Key.get_value(%SlackDB.Key{
+    assert get_value(%SlackDB.Key{
              channel_id: "CFFD4EEMR",
              channel_name: "general",
              key_phrase: "key",
@@ -56,7 +56,7 @@ defmodule SlackDB.KeyTest do
   end
 
   test "multiple key" do
-    assert SlackDB.Key.get_value(%SlackDB.Key{
+    assert get_value(%SlackDB.Key{
              channel_id: "CFFD4EEMR",
              channel_name: "general",
              key_phrase: "key",
@@ -67,7 +67,7 @@ defmodule SlackDB.KeyTest do
   end
 
   test "single front key" do
-    assert SlackDB.Key.get_value(%SlackDB.Key{
+    assert get_value(%SlackDB.Key{
              channel_id: "CFFD4EEMR",
              channel_name: "general",
              key_phrase: "key",
@@ -78,7 +78,7 @@ defmodule SlackDB.KeyTest do
   end
 
   test "single back key" do
-    assert SlackDB.Key.get_value(%SlackDB.Key{
+    assert get_value(%SlackDB.Key{
              channel_id: "CFFD4EEMR",
              channel_name: "general",
              key_phrase: "key",
