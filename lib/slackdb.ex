@@ -164,6 +164,9 @@ defmodule SlackDB do
 
   This function returns an error tuple or a list of tuples indicating the result of posting each value.
 
+  ## Options
+  * `only_bot?` - boolean, whether to only search for bot-made keys. Defaults to true.
+
   ## Example
 
       iex> SlackDB.update("dog_shelter", "adopted", "Chihuahuas", "Ren")
@@ -176,14 +179,19 @@ defmodule SlackDB do
         },
       ]}
   """
-  @spec update(String.t(), String.t(), String.t(), SlackDB.Key.value()) ::
+  @spec update(String.t(), String.t(), String.t(), SlackDB.Key.value(), keyword()) ::
           {:error, String.t()} | {:ok, list(tuple())}
-  def update(server_name, channel_name, key_phrase, value) when is_binary(value),
-    do: update(server_name, channel_name, key_phrase, [value])
 
-  def update(server_name, channel_name, key_phrase, values) when is_list(values) do
+  def update(server_name, channel_name, key_phrase, values, opts \\ [])
+
+  def update(server_name, channel_name, key_phrase, value, opts) when is_binary(value),
+    do: update(server_name, channel_name, key_phrase, [value], opts)
+
+  def update(server_name, channel_name, key_phrase, values, opts) when is_list(values) do
+    only_bot? = Keyword.get(opts, :only_bot?, true)
+
     with :ok <- validate_values(values),
-         {:ok, key} <- search().search(server_name, channel_name, key_phrase, false) do
+         {:ok, key} <- search().search(server_name, channel_name, key_phrase, only_bot?) do
       cond do
         :constant in key.metadata ->
           {:error, "cannot_update_constant_key"}
@@ -204,6 +212,9 @@ defmodule SlackDB do
 
   This function returns an error tuple or a list of tuples indicating the result of deleting each message in the thread.
 
+  ## Options
+  * `only_bot?` - boolean, whether to only search for bot-made keys. Defaults to true.
+
   ## Example
 
       iex> SlackDB.delete("dog_shelter", "yet-to-be-adopted", "Chihuahuas")
@@ -216,9 +227,12 @@ defmodule SlackDB do
         },
       ]}
   """
-  @spec delete(String.t(), String.t(), String.t()) :: {:error, String.t()} | {:ok, list(tuple())}
-  def delete(server_name, channel_name, key_phrase) do
-    with {:ok, key} <- search().search(server_name, channel_name, key_phrase, false) do
+  @spec delete(String.t(), String.t(), String.t(), keyword()) ::
+          {:error, String.t()} | {:ok, list(tuple())}
+  def delete(server_name, channel_name, key_phrase, opts \\ []) do
+    only_bot? = Keyword.get(opts, :only_bot?, true)
+
+    with {:ok, key} <- search().search(server_name, channel_name, key_phrase, only_bot?) do
       cond do
         :undeletable in key.metadata -> {:error, "cannot_delete_undeletable_key"}
         true -> messages().wipe_thread(key, include_key?: true)
@@ -237,6 +251,9 @@ defmodule SlackDB do
 
   This function returns an error tuple or a list of tuples indicating the result of posting each value.
 
+  ## Options
+  * `only_bot?` - boolean, whether to only search for bot-made keys. Defaults to true.
+
   ## Example
 
       iex> SlackDB.append("dog_shelter", "adopted", "Chihuahuas", "Ren")
@@ -251,13 +268,17 @@ defmodule SlackDB do
   """
   @spec append(String.t(), String.t(), String.t(), SlackDB.Key.value()) ::
           {:ok, [tuple()]} | {:error, String.t()}
-  def append(server_name, channel_name, key_phrase, value) when is_binary(value),
-    do: append(server_name, channel_name, key_phrase, [value])
+  def append(server_name, channel_name, key_phrase, value, opts \\ [])
 
-  def append(server_name, channel_name, key_phrase, values) when is_list(values) do
+  def append(server_name, channel_name, key_phrase, value, opts) when is_binary(value),
+    do: append(server_name, channel_name, key_phrase, [value], opts)
+
+  def append(server_name, channel_name, key_phrase, values, opts) when is_list(values) do
+    only_bot? = Keyword.get(opts, :only_bot?, true)
+
     with :ok <- validate_values(values),
          {:ok, key} <-
-           search().search(server_name, channel_name, key_phrase, false) do
+           search().search(server_name, channel_name, key_phrase, only_bot?) do
       cond do
         :constant in key.metadata ->
           {:error, "cannot_append_to_constant_key"}
@@ -437,7 +458,7 @@ defmodule SlackDB do
   defp validate_values([value | other_values]) do
     case Utils.check_schema(value) do
       nil -> validate_values(other_values)
-      _ -> {:error, "values must not match key schema"}
+      _ -> {:error, "values_cannot_match_key_schema"}
     end
   end
 end

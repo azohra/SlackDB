@@ -265,12 +265,12 @@ defmodule SlackDBTest do
     {:ok, _pid} = SlackDB.Server.start_link()
 
     assert create("server", "new", "key_phrase", "value :family:", :single_back) ==
-             {:error, "values must not match key schema"}
+             {:error, "values_cannot_match_key_schema"}
 
     assert update("server", "new", "key_phrase", "value :family:") ==
-             {:error, "values must not match key schema"}
+             {:error, "values_cannot_match_key_schema"}
 
     assert append("server", "new", "key_phrase", "value :family:") ==
-             {:error, "values must not match key schema"}
+             {:error, "values_cannot_match_key_schema"}
   end
 end
