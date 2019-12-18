@@ -97,16 +97,15 @@ defmodule SlackDB do
 
   def create(server_name, channel_name, key_phrase, values, key_type, add_metadata)
       when is_list(values) and is_list(add_metadata) and is_atom(key_type) do
-    Utils.check_schema(key_phrase)
-    |> case do
-      nil ->
-        GenServer.call(
-          Server,
-          {:create, server_name, channel_name, key_phrase, values, [key_type | add_metadata]}
-        )
-
-      _ ->
-        {:error, "invalid_key_phrase"}
+    with nil <- Utils.check_schema(key_phrase),
+         :ok <- validate_values(values) do
+      GenServer.call(
+        Server,
+        {:create, server_name, channel_name, key_phrase, values, [key_type | add_metadata]}
+      )
+    else
+      {:error, msg} -> {:error, msg}
+      _err -> {:error, "invalid_key_phrase"}
     end
   end
 
@@ -185,7 +184,8 @@ defmodule SlackDB do
     do: update(server_name, channel_name, key_phrase, [value])
 
   def update(server_name, channel_name, key_phrase, values) when is_list(values) do
-    with {:ok, key} <- search().search(server_name, channel_name, key_phrase, false) do
+    with :ok <- validate_values(values),
+         {:ok, key} <- search().search(server_name, channel_name, key_phrase, false) do
       cond do
         :constant in key.metadata ->
           {:error, "cannot_update_constant_key"}
@@ -257,7 +257,8 @@ defmodule SlackDB do
     do: append(server_name, channel_name, key_phrase, [value])
 
   def append(server_name, channel_name, key_phrase, values) when is_list(values) do
-    with {:ok, key} <-
+    with :ok <- validate_values(values),
+         {:ok, key} <-
            search().search(server_name, channel_name, key_phrase, only_bot?: true) do
       cond do
         :constant in key.metadata ->
@@ -302,8 +303,6 @@ defmodule SlackDB do
              server_name,
              new_state |> get_in([server_name, :channels]) |> Jason.encode!()
            ) do
-      IO.inspect(channel_id, label: "#{channel_name} ")
-
       {:ok, new_state}
     else
       err -> err
@@ -428,5 +427,19 @@ defmodule SlackDB do
   @spec dump() :: map()
   def dump() do
     GenServer.call(Server, {:dump})
+  end
+
+  ####################################################################################
+  ## PRIVATE HELPERS #################################################################
+  ####################################################################################
+
+  # checks a list of values to ensure that none of them match the key schema
+  defp validate_values([]), do: :ok
+
+  defp validate_values([value | other_values]) do
+    case Utils.check_schema(value) do
+      nil -> validate_values(other_values)
+      _ -> {:error, "values must not match key schema"}
+    end
   end
 end
