@@ -1,1 +1,7 @@
 ExUnit.start()
+Mox.defmock(Client.Mock, for: SlackDB.Client)
+Mox.defmock(Messages.Mock, for: SlackDB.Messages)
+Mox.defmock(SlackDB.Mock, for: SlackDB)
+Mox.defmock(Search.Mock, for: SlackDB.Search)
+Mox.defmock(Channels.Mock, for: SlackDB.Channels)
+Mox.defmock(Key.Mock, for: SlackDB.Key)

@@ -1,18 +1,46 @@
 defmodule SlackDB.Client do
   @moduledoc false
-  require Logger
+
   use Tesla
+
+  require Logger
+
+  @callback search_messages(String.t(), String.t(), keyword()) ::
+              {:error, any()} | {:ok, map()}
+  @callback chat_postMessage(String.t(), String.t(), String.t()) ::
+              {:error, any()} | {:ok, map()}
+  @callback chat_postMessage(String.t(), String.t(), String.t(), keyword()) ::
+              {:error, any()} | {:ok, map()}
+  @callback chat_delete(String.t(), String.t(), String.t()) ::
+              {:error, any()} | {:ok, map()}
+  @callback conversations_create(String.t(), String.t(), keyword()) ::
+              {:error, any()} | {:ok, map()}
+  @callback conversations_archive(String.t(), String.t()) ::
+              {:error, any()} | {:ok, map()}
+  @callback conversations_invite(String.t(), String.t(), String.t()) ::
+              {:error, any()} | {:ok, map()}
+  @callback conversations_list(String.t(), keyword()) ::
+              {:error, any()} | {:ok, map()}
+  @callback conversations_replies(String.t(), SlackDB.Key.t(), keyword()) ::
+              {:error, any()} | {:ok, map()}
+
   @base_url "https://slack.com/api"
 
-  @spec search_messages(String.t(), String.t()) :: {:error, any()} | {:ok, map()}
-  def search_messages(user_token, query) do
+  @doc """
+  ## Options
+  * `:page` - integer for pagination
+  """
+  @spec search_messages(String.t(), String.t(), keyword()) :: {:error, any()} | {:ok, map()}
+  def search_messages(user_token, query, opts \\ []) do
     with {:ok, resp} <-
            client(user_token)
            |> post("/search.messages", %{
              query: query,
              highlight: false,
              sort: "timestamp",
-             sort_dir: "desc"
+             sort_dir: "desc",
+             page: Keyword.get(opts, :page, 1)
+             # count: 1
            }) do
       case resp.body |> Jason.decode!() do
         %{"ok" => true, "messages" => messages} -> {:ok, messages}
@@ -22,9 +50,13 @@ defmodule SlackDB.Client do
     end
   end
 
-  @spec chat_postMessage(String.t(), String.t(), String.t(), String.t() | atom()) ::
+  @doc """
+  ## Options
+  * `:thread_ts` - slack timestamp string
+  """
+  @spec chat_postMessage(String.t(), String.t(), String.t(), keyword()) ::
           {:error, any()} | {:ok, map()}
-  def chat_postMessage(bot_token, text, channel_id, thread_ts \\ nil) do
+  def chat_postMessage(bot_token, text, channel_id, opts \\ []) do
     with {:ok, resp} <-
            client(bot_token)
            |> post(
@@ -33,7 +65,7 @@ defmodule SlackDB.Client do
                channel: channel_id,
                text: text,
                as_user: true,
-               thread_ts: thread_ts
+               thread_ts: Keyword.get(opts, :thread_ts, nil)
              }
            ) do
       case resp.body |> Jason.decode!() do
@@ -63,8 +95,12 @@ defmodule SlackDB.Client do
     end
   end
 
-  @spec conversations_create(String.t(), String.t(), boolean()) :: {:error, any()} | {:ok, map()}
-  def conversations_create(user_token, name, is_private?) do
+  @doc """
+  ## Options
+  * `:is_private` - boolean
+  """
+  @spec conversations_create(String.t(), String.t(), keyword()) :: {:error, any()} | {:ok, map()}
+  def conversations_create(user_token, name, opts \\ []) do
     with {:ok, resp} <-
            client(user_token)
            |> post(
@@ -72,7 +108,7 @@ defmodule SlackDB.Client do
              %{
                name: name,
                validate: true,
-               is_private: is_private?
+               is_private: Keyword.get(opts, :is_private, false)
              }
            ) do
       case resp.body |> Jason.decode!() do
@@ -117,15 +153,20 @@ defmodule SlackDB.Client do
     end
   end
 
-  @spec conversations_list(String.t(), String.t() | atom(), number()) ::
+  @doc """
+  ## Options
+  * `:limit` - integer <= 200, defaults to 200. represents number of conversations returned at once
+  * `:cursor` - string for pagination, nil by default
+  """
+  @spec conversations_list(String.t(), keyword()) ::
           {:error, any()} | {:ok, map()}
-  def conversations_list(user_token, cursor \\ nil, limit \\ 200) do
+  def conversations_list(user_token, opts \\ []) do
     with {:ok, resp} <-
            client(user_token)
            |> post("/conversations.list", %{
              exclude_archived: true,
-             limit: limit,
-             cursor: cursor,
+             limit: Keyword.get(opts, :limit, 200),
+             cursor: Keyword.get(opts, :cursor, nil),
              types: "public_channel,private_channel"
            }) do
       case resp.body |> Jason.decode!() do
@@ -136,17 +177,21 @@ defmodule SlackDB.Client do
     end
   end
 
-  # returns the most recent <limit_number> replies in chron order
-  @spec conversations_replies(String.t(), SlackDB.Key.t(), String.t() | atom(), number()) ::
+  @doc """
+  ## Options
+  * `:limit` - integer <= 200, defaults to 200. represents number of conversations returned at once
+  * `:cursor` - string for pagination, nil by default
+  """
+  @spec conversations_replies(String.t(), SlackDB.Key.t(), keyword()) ::
           {:error, any()} | {:ok, map()}
-  def conversations_replies(user_token, key, cursor \\ nil, limit \\ 200) do
+  def conversations_replies(user_token, key, opts \\ []) do
     with {:ok, resp} <-
            client(user_token)
            |> post("/conversations.replies", %{
              channel: key.channel_id,
              ts: key.ts,
-             limit: limit,
-             cursor: cursor
+             limit: Keyword.get(opts, :limit, 200),
+             cursor: Keyword.get(opts, :cursor, nil)
            }) do
       case resp.body |> Jason.decode!() do
         %{"ok" => true} = body -> {:ok, body}
@@ -161,7 +206,6 @@ defmodule SlackDB.Client do
       {Tesla.Middleware.BaseUrl, @base_url},
       {Tesla.Middleware.Headers,
        [
-         #  {"content-type", "application/x-www-form-urlencoded"},
          {"authorization", "Bearer " <> token}
        ]},
       {Tesla.Middleware.FormUrlencoded, []}

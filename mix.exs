@@ -4,7 +4,7 @@ defmodule SlackDB.MixProject do
   def project do
     [
       app: :slackdb,
-      version: "0.1.1",
+      version: "0.2.0",
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
       description: description(),
@@ -31,22 +31,16 @@ defmodule SlackDB.MixProject do
   end
 
   defp copy_images(_) do
-    File.cp_r("design", "doc/design", fn source, destination ->
-      IO.gets("Overwriting #{destination} by #{source}. Type y to confirm. ") == "y\n"
-    end)
-
-    # File.cp_r("doc", "docs", fn _source, _destination ->
-    #   true
-    # end)
+    File.cp_r("design", "doc/design")
   end
 
   defp deps do
     [
       {:tesla, "~> 1.2.1"},
       {:jason, ">= 1.0.0"},
-      {:private, "~> 0.1.1"},
       {:flow, "~> 0.14"},
-      {:ex_doc, ">= 0.0.0", only: :dev}
+      {:ex_doc, ">= 0.0.0", only: :dev},
+      {:mox, "~> 0.5", only: :test}
     ]
   end
 

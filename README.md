@@ -44,7 +44,7 @@ Add the `:slackdb` dependency to your `mix.exs` file:
 ```elixir
 def deps do
   [
-    {:slackdb, "~> 0.1.1"}
+    {:slackdb, "~> 0.2.0"}
   ]
 end
 ```
@@ -66,7 +66,7 @@ Before startup, you'll need to:
 This channel is responsible for storing the current state (meaning a map of channel names->ids that are currently 'registered') of the database on that particular server. On startup, SlackDB will look in this channel and load the current state. If it can't find the current state, it will start from scratch assuming no channels have yet to be registered with the DB
 
 Your app needs to have the following scopes to get full SlackDB functionality:
-`search:read`, `chat.delete`, `channels:write`, `groups:write`, `channels:read`, `groups:read`, `	reactions:read`, `channels:history`, `groups:history`
+`search:read`, `chat:write`, `chat:write:bot`, `chat:write:user`,`channels:write`, `groups:write`, `channels:read`, `groups:read`, `	reactions:read`, `channels:history`, `groups:history`, 
 
 Once you have your supervisor channels, fill out the config like so:
 
@@ -77,7 +77,7 @@ config :slackdb,
       bot_token: "xoxb-shhh...",
       user_token: "xoxp-shhh...",
       bot_name: "Jeanie",
-      supervisor_channel_name: "sladckdb-admin",
+      supervisor_channel_name: "slacckdb-admin",
       supervisor_channel_id: "CFC6MRQ06"
     }
     # "server2" => %{...}
@@ -88,14 +88,14 @@ config :slackdb,
 
 It's pretty simple. Here is an example from the command line:
 ```elixir 
-iex> {:ok, pid} =  SlackDB.start_link()
+iex> {:ok, pid} =  SlackDB.Server.start_link()
 iex> SlackDB.dump() 
 %{
 "server_name" => %{
   bot_token: "xoxb-shhh...",
   user_token: "xoxp-shhh...",
   bot_name: "Jeanie",
-  supervisor_channel_name: "sladckdb-admin",
+  supervisor_channel_name: "slackdb-admin",
   supervisor_channel_id: "CFC6MRQ06",
   channels: %{"loaded_from" => "supervisor_channel"}
 }
