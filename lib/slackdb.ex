@@ -66,7 +66,7 @@ defmodule SlackDB do
   ## Example
 
       iex> SlackDB.create("dog_shelter", "adopted", "Beagles", ["Buddy", "Rufus"], :multiple, [:undeletable])
-      [
+      {:ok, [
         ok: %{
           "channel" => "CHU427918",
           "message" => %{...},
@@ -79,7 +79,7 @@ defmodule SlackDB do
           "ok" => true,
           "ts" => "1556129093.001000"
         }
-      ]
+      ]}
   """
   @spec create(
           String.t(),
@@ -140,7 +140,7 @@ defmodule SlackDB do
   This will always pull from the most recently posted message that matches the key schema.
 
   ## Options
-  * `only_bot` - boolean, whether to only search for bot-made keys. Defaults to true.
+  * `only_bot?` - boolean, whether to only search for bot-made keys. Defaults to true.
 
   ## Example
 
@@ -170,14 +170,14 @@ defmodule SlackDB do
   ## Example
 
       iex> SlackDB.update("dog_shelter", "adopted", "Chihuahuas", "Ren")
-      [
+      {:ok, [
         ok: %{
           "channel" => "CHU427918",
           "message" => %{...},
           "ok" => true,
           "ts" => "1556129092.000800"
         },
-      ]
+      ]}
   """
   @spec update(String.t(), String.t(), String.t(), SlackDB.Key.value()) ::
           {:error, String.t()} | {:ok, list(tuple())}
@@ -209,14 +209,14 @@ defmodule SlackDB do
   ## Example
 
       iex> SlackDB.delete("dog_shelter", "yet-to-be-adopted", "Chihuahuas")
-      [
+      {:ok, [
         ok: %{
           "channel" => "CHU427918",
           "message" => %{...},
           "ok" => true,
           "ts" => "1556129092.000800"
         },
-      ]
+      ]}
   """
   @spec delete(String.t(), String.t(), String.t()) :: {:error, String.t()} | {:ok, list(tuple())}
   def delete(server_name, channel_name, key_phrase) do
@@ -242,14 +242,14 @@ defmodule SlackDB do
   ## Example
 
       iex> SlackDB.append("dog_shelter", "adopted", "Chihuahuas", "Ren")
-      [
+      {:ok, [
         ok: %{
           "channel" => "CHU427918",
           "message" => %{...},
           "ok" => true,
           "ts" => "1556129092.000800"
         }
-      ]
+      ]}
   """
   @spec append(String.t(), String.t(), String.t(), SlackDB.Key.value()) ::
           {:ok, [tuple()]} | {:error, String.t()}
@@ -283,7 +283,7 @@ defmodule SlackDB do
   ## Example
 
       iex> SlackDB.new_channel("dog_shelter", "volunteers", false)
-      {:ok, "channel added"}
+      {:ok, %{...new_db_state...}}
   """
   @spec new_channel(String.t(), String.t(), keyword()) :: {:error, String.t()} | {:ok, map()}
   def new_channel(server_name, channel_name, opts \\ []) do
@@ -319,7 +319,7 @@ defmodule SlackDB do
   ## Example
 
       iex> SlackDB.include_channel("dog_shelter", "employees")
-      {:ok, "channel added"}
+      {:ok, %{...new_db_state...}}
   """
   @spec include_channel(String.t(), String.t()) :: {:error, String.t()} | {:ok, map()}
   def include_channel(server_name, channel_name) do
@@ -349,7 +349,7 @@ defmodule SlackDB do
   ## Example
 
       iex> SlackDB.archive_channel("dog_shelter", "coops-winter-2019")
-      {:ok, "channel archived"}
+      {:ok, %{...new_db_state...}}
   """
   @spec archive_channel(String.t(), String.t()) :: {:error, String.t()} | {:ok, map()}
   def archive_channel(server_name, channel_name) do
@@ -393,7 +393,7 @@ defmodule SlackDB do
   ## Example
 
       iex> SlackDB.invite_supervisors("dog_shelter", ["USERID1", "USERID2"])
-      {:ok, %{"name" => "adopted", "id" => "CHU427918"}}
+      {:ok, %{"name" => "slackdb-admin", "id" => "CFC6MRQ06"}}
   """
   @spec invite_supervisors(String.t(), String.t() | list(String.t())) ::
           {:error, String.t()} | {:ok, map()}
