@@ -259,7 +259,7 @@ defmodule SlackDB do
   def append(server_name, channel_name, key_phrase, values) when is_list(values) do
     with :ok <- validate_values(values),
          {:ok, key} <-
-           search().search(server_name, channel_name, key_phrase, only_bot?: true) do
+           search().search(server_name, channel_name, key_phrase, false) do
       cond do
         :constant in key.metadata ->
           {:error, "cannot_append_to_constant_key"}
