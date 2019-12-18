@@ -116,7 +116,7 @@ defmodule SlackDB do
   This will always pull from the most recently posted message that matches the key schema.
 
   ## Options
-  * `only_bot` - boolean, whether to only search for bot-made keys. Defaults to true.
+  * `only_bot?` - boolean, whether to only search for bot-made keys. Defaults to true.
 
   ## Example
 
