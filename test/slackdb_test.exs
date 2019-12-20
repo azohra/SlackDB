@@ -47,15 +47,12 @@ defmodule SlackDBTest do
     "bot_id" => "BQK7W4KKQ"
   }
 
-  @server_state_json "{\"new\":\"CQGTEPMUL\",\"new_private\":\"GQHDCMB9N\"}"
-  @server_state_map %{"new" => "CQGTEPMUL", "new_private" => "GQHDCMB9N"}
-
   setup :set_mox_global
 
   setup do
     SlackDB.Mock
     |> expect(:read, 2, fn
-      "server", _, _ -> {:ok, @server_state_json}
+      "server", _, _ -> {:ok, "{\"new\":\"CQGTEPMUL\",\"new_private\":\"GQHDCMB9N\"}"}
       "un_initialized_server", _, _ -> {:error, "found_no_matches"}
     end)
 
