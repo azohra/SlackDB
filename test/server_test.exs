@@ -16,11 +16,14 @@ defmodule SlackDB.ServerTest do
     "bot_id" => "BQK7W4KKQ"
   }
 
+  @server_state_json "{\"new\":\"CQGTEPMUL\",\"new_private\":\"GQHDCMB9N\"}"
+  @server_state_map %{"new" => "CQGTEPMUL", "new_private" => "GQHDCMB9N"}
+
   setup do
     SlackDB.Mock
     |> expect(:read, 2, fn
       "server", _, _, _ ->
-        {:ok, "{\"new\":\"CQGTEPMUL\",\"new_private\":\"GQHDCMB9N\"}"}
+        {:ok, @server_state_json}
 
       "un_initialized_server", _, _, _ ->
         {:error, "found_no_matches"}
@@ -78,17 +81,27 @@ defmodule SlackDB.ServerTest do
 
     assert init(config) ==
              {:ok,
-              %{
-                "server" => %{
-                  bot_name: "Jeanie",
-                  bot_token: "xoxb",
-                  bot_user_id: "UQGHG5JF6",
-                  channels: %{"new" => "CQGTEPMUL", "new_private" => "GQHDCMB9N"},
-                  supervisor_channel_id: "CFC6MRQ06",
-                  supervisor_channel_name: "slackdb-admin",
-                  user_token: "xoxp"
-                }
-              }}
+              config
+              |> put_in(["server", :bot_user_id], @auth_test_result["user_id"])
+              |> put_in(["server", :channels], @server_state_map)}
+  end
+
+  test "init initialize server" do
+    config = %{
+      "un_initialized_server" => %{
+        bot_token: "xoxb",
+        user_token: "xoxp",
+        bot_name: "Jeanie",
+        supervisor_channel_name: "slackdb-admin",
+        supervisor_channel_id: "CFC6MRQ06"
+      }
+    }
+
+    assert init(config) ==
+             {:ok,
+              config
+              |> put_in(["un_initialized_server", :bot_user_id], @auth_test_result["user_id"])
+              |> put_in(["un_initialized_server", :channels], %{})}
   end
 
   test "handle_call put_channel" do
