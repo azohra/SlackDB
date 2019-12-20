@@ -22,11 +22,8 @@ defmodule SlackDB.ServerTest do
   setup do
     SlackDB.Mock
     |> expect(:read, 2, fn
-      "server", _, _, _ ->
-        {:ok, @server_state_json}
-
-      "un_initialized_server", _, _, _ ->
-        {:error, "found_no_matches"}
+      "server", _, _ -> {:ok, @server_state_json}
+      "un_initialized_server", _, _ -> {:error, "found_no_matches"}
     end)
 
     Messages.Mock

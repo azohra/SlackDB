@@ -157,7 +157,7 @@ defmodule SlackDB.Server do
     populated =
       for {server_name, server_config} <- config, into: %{} do
         channels =
-          case slackdb().read(server_name, server_config.supervisor_channel_name, server_name, []) do
+          case slackdb().read(server_name, server_config.supervisor_channel_name, server_name) do
             {:ok, server_state} -> server_state |> Jason.decode!()
             {:error, _not_found} -> initialize_supervisor_channel(server_name)
           end

@@ -40,23 +40,23 @@ defmodule SlackDBTest do
     "name" => "new"
   }
 
-  # @auth_test_result %{
-  #   "ok" => true,
-  #   "user" => "slackdbot",
-  #   "user_id" => "UQGHG5JF6",
-  #   "bot_id" => "BQK7W4KKQ"
-  # }
+  @auth_test_result %{
+    "ok" => true,
+    "user" => "slackdbot",
+    "user_id" => "UQGHG5JF6",
+    "bot_id" => "BQK7W4KKQ"
+  }
+
+  @server_state_json "{\"new\":\"CQGTEPMUL\",\"new_private\":\"GQHDCMB9N\"}"
+  @server_state_map %{"new" => "CQGTEPMUL", "new_private" => "GQHDCMB9N"}
 
   setup :set_mox_global
 
   setup do
     SlackDB.Mock
     |> expect(:read, 2, fn
-      "server", _, _ ->
-        {:ok, "{\"new\":\"CQGTEPMUL\",\"new_private\":\"GQHDCMB9N\"}"}
-
-      "un_initialized_server", _, _ ->
-        {:error, "found_no_matches"}
+      "server", _, _ -> {:ok, @server_state_json}
+      "un_initialized_server", _, _ -> {:error, "found_no_matches"}
     end)
 
     Search.Mock
@@ -103,8 +103,7 @@ defmodule SlackDBTest do
     |> expect(:conversations_create, 1, fn
       _, chnl, _ -> {:ok, @channel_info |> Map.put("name", chnl)}
     end)
-
-    # |> expect(:auth_test, 5, fn _ -> {:ok, @auth_test_result} end)
+    |> expect(:auth_test, 2, fn _ -> {:ok, @auth_test_result} end)
 
     :ok
   end
@@ -166,25 +165,27 @@ defmodule SlackDBTest do
     assert new_channel("server", "newly_created") ==
              {:ok,
               %{
+                "server" => %{
+                  bot_name: "Jeanie",
+                  bot_token: "xoxb",
+                  channels: %{
+                    "new" => "CQGTEPMUL",
+                    "new_private" => "GQHDCMB9N",
+                    "newly_created" => "C012AB3CD"
+                  },
+                  supervisor_channel_id: "CFC6MRQ06",
+                  supervisor_channel_name: "slackdb-admin",
+                  user_token: "xoxp",
+                  bot_user_id: "UQGHG5JF6"
+                },
                 "un_initialized_server" => %{
                   bot_name: "Jeanie",
                   bot_token: "xoxb",
                   channels: %{},
                   supervisor_channel_id: "CFC6MRQ07",
                   supervisor_channel_name: "slackdb-new-admins",
-                  user_token: "xoxp"
-                },
-                "server" => %{
-                  bot_name: "Jeanie",
-                  bot_token: "xoxb",
-                  supervisor_channel_id: "CFC6MRQ06",
-                  supervisor_channel_name: "slackdb-admin",
                   user_token: "xoxp",
-                  channels: %{
-                    "new_private" => "GQHDCMB9N",
-                    "new" => "CQGTEPMUL",
-                    "newly_created" => "C012AB3CD"
-                  }
+                  bot_user_id: "UQGHG5JF6"
                 }
               }}
   end
@@ -195,25 +196,27 @@ defmodule SlackDBTest do
     assert include_channel("server", "general") ==
              {:ok,
               %{
+                "server" => %{
+                  bot_name: "Jeanie",
+                  bot_token: "xoxb",
+                  channels: %{
+                    "general" => "CQ5H0K15Z",
+                    "new" => "CQGTEPMUL",
+                    "new_private" => "GQHDCMB9N"
+                  },
+                  supervisor_channel_id: "CFC6MRQ06",
+                  supervisor_channel_name: "slackdb-admin",
+                  user_token: "xoxp",
+                  bot_user_id: "UQGHG5JF6"
+                },
                 "un_initialized_server" => %{
                   bot_name: "Jeanie",
                   bot_token: "xoxb",
                   channels: %{},
                   supervisor_channel_id: "CFC6MRQ07",
                   supervisor_channel_name: "slackdb-new-admins",
-                  user_token: "xoxp"
-                },
-                "server" => %{
-                  bot_name: "Jeanie",
-                  bot_token: "xoxb",
-                  supervisor_channel_id: "CFC6MRQ06",
-                  supervisor_channel_name: "slackdb-admin",
                   user_token: "xoxp",
-                  channels: %{
-                    "new_private" => "GQHDCMB9N",
-                    "new" => "CQGTEPMUL",
-                    "general" => "CQ5H0K15Z"
-                  }
+                  bot_user_id: "UQGHG5JF6"
                 }
               }}
 
@@ -232,7 +235,8 @@ defmodule SlackDBTest do
                   channels: %{"new_private" => "GQHDCMB9N"},
                   supervisor_channel_id: "CFC6MRQ06",
                   supervisor_channel_name: "slackdb-admin",
-                  user_token: "xoxp"
+                  user_token: "xoxp",
+                  bot_user_id: "UQGHG5JF6"
                 },
                 "un_initialized_server" => %{
                   bot_name: "Jeanie",
@@ -240,7 +244,8 @@ defmodule SlackDBTest do
                   channels: %{},
                   supervisor_channel_id: "CFC6MRQ07",
                   supervisor_channel_name: "slackdb-new-admins",
-                  user_token: "xoxp"
+                  user_token: "xoxp",
+                  bot_user_id: "UQGHG5JF6"
                 }
               }}
 
@@ -257,7 +262,8 @@ defmodule SlackDBTest do
                channels: %{"new" => "CQGTEPMUL", "new_private" => "GQHDCMB9N"},
                supervisor_channel_id: "CFC6MRQ06",
                supervisor_channel_name: "slackdb-admin",
-               user_token: "xoxp"
+               user_token: "xoxp",
+               bot_user_id: "UQGHG5JF6"
              },
              "un_initialized_server" => %{
                bot_name: "Jeanie",
@@ -265,7 +271,8 @@ defmodule SlackDBTest do
                channels: %{},
                supervisor_channel_id: "CFC6MRQ07",
                supervisor_channel_name: "slackdb-new-admins",
-               user_token: "xoxp"
+               user_token: "xoxp",
+               bot_user_id: "UQGHG5JF6"
              }
            }
   end
