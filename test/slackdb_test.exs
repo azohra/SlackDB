@@ -40,6 +40,13 @@ defmodule SlackDBTest do
     "name" => "new"
   }
 
+  # @auth_test_result %{
+  #   "ok" => true,
+  #   "user" => "slackdbot",
+  #   "user_id" => "UQGHG5JF6",
+  #   "bot_id" => "BQK7W4KKQ"
+  # }
+
   setup :set_mox_global
 
   setup do
@@ -96,6 +103,8 @@ defmodule SlackDBTest do
     |> expect(:conversations_create, 1, fn
       _, chnl, _ -> {:ok, @channel_info |> Map.put("name", chnl)}
     end)
+
+    # |> expect(:auth_test, 5, fn _ -> {:ok, @auth_test_result} end)
 
     :ok
   end

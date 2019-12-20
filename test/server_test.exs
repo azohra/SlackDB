@@ -65,6 +65,32 @@ defmodule SlackDB.ServerTest do
              {:stop, "The following servers are improperly configured: empty, missing"}
   end
 
+  test "init proper" do
+    config = %{
+      "server" => %{
+        bot_token: "xoxb",
+        user_token: "xoxp",
+        bot_name: "Jeanie",
+        supervisor_channel_name: "slackdb-admin",
+        supervisor_channel_id: "CFC6MRQ06"
+      }
+    }
+
+    assert init(config) ==
+             {:ok,
+              %{
+                "server" => %{
+                  bot_name: "Jeanie",
+                  bot_token: "xoxb",
+                  bot_user_id: "UQGHG5JF6",
+                  channels: %{"new" => "CQGTEPMUL", "new_private" => "GQHDCMB9N"},
+                  supervisor_channel_id: "CFC6MRQ06",
+                  supervisor_channel_name: "slackdb-admin",
+                  user_token: "xoxp"
+                }
+              }}
+  end
+
   test "handle_call put_channel" do
     state = %{"server" => %{channels: %{}}}
     new_state = %{"server" => %{channels: %{"new_channel" => "new_id"}}}
@@ -109,5 +135,11 @@ defmodule SlackDB.ServerTest do
              nil,
              state
            ) == {:reply, {:ok, [ok: %{"ok" => true}]}, state}
+  end
+
+  test "handle_call dump" do
+    state = %{"server" => %{user_token: "xoxp", channels: %{"channel_works" => "channel_works"}}}
+
+    assert handle_call({:dump}, nil, state) == {:reply, state, state}
   end
 end
