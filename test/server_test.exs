@@ -9,6 +9,13 @@ defmodule SlackDB.ServerTest do
     "name" => "general"
   }
 
+  @auth_test_result %{
+    "ok" => true,
+    "user" => "slackdbot",
+    "user_id" => "UQGHG5JF6",
+    "bot_id" => "BQK7W4KKQ"
+  }
+
   setup do
     SlackDB.Mock
     |> expect(:read, 2, fn
@@ -29,6 +36,7 @@ defmodule SlackDB.ServerTest do
       _, "channel_works" -> {:ok, %{"ok" => true}}
       _, "channel_fails" -> {:error, "channel_failed"}
     end)
+    |> expect(:auth_test, 1, fn _ -> {:ok, @auth_test_result} end)
 
     Channels.Mock
     |> expect(:invite_to_channel, 1, fn

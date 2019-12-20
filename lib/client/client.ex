@@ -23,6 +23,7 @@ defmodule SlackDB.Client do
               {:error, any()} | {:ok, map()}
   @callback conversations_replies(String.t(), SlackDB.Key.t(), keyword()) ::
               {:error, any()} | {:ok, map()}
+  @callback auth_test(String.t()) :: {:error, any()} | {:ok, map()}
 
   @base_url "https://slack.com/api"
 
@@ -201,6 +202,17 @@ defmodule SlackDB.Client do
     end
   end
 
+  @spec auth_test(String.t()) :: {:error, any()} | {:ok, map()}
+  def auth_test(token) do
+    with {:ok, resp} <- client(token) |> post("/auth.test", %{}) do
+      case resp.body |> Jason.decode!() do
+        %{"ok" => true} = body -> {:ok, body}
+        %{"ok" => false, "error" => error} -> {:error, error}
+        _ -> {:error, resp.status}
+      end
+    end
+  end
+
   defp client(token) do
     middleware = [
       {Tesla.Middleware.BaseUrl, @base_url},
@@ -245,22 +257,6 @@ defmodule SlackDB.Client do
   #          ) do
   #     case resp.body |> Jason.decode!() do
   #       %{"ok" => true} = body -> {:ok, body}
-  #       %{"ok" => false, "error" => error} -> {:error, error}
-  #       _ -> {:error, resp.status}
-  #     end
-  #   end
-  # end
-
-  # @spec conversations_join(String.t(), String.t()) :: {:error, any()} | {:ok, map()}
-  # def conversations_join(user_token, channel_id) do
-  #   with {:ok, resp} <-
-  #          client(user_token)
-  #          |> post(
-  #            "/conversations.join",
-  #            %{channel: channel_id}
-  #          ) do
-  #     case resp.body |> Jason.decode!() do
-  #       %{"ok" => true, "channel" => channel_info} -> {:ok, channel_info}
   #       %{"ok" => false, "error" => error} -> {:error, error}
   #       _ -> {:error, resp.status}
   #     end
